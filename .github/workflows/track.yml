@@ -48,7 +48,4 @@ jobs:
       - name: Track parcels
         env:
           TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
-          # TEMP: silences notifications while seeding the state cache.
-          # Remove after the first successful run.
-          TRACKER_SILENT: '1'
         run: python tracker.py
