@@ -1,0 +1,15 @@
+{
+  "trackers": [
+    {
+      "name": "Example Parcel",
+      "courier": "dex",
+      "tracking_number": "YOUR_TRACKING_NUMBER"
+    }
+  ],
+  "ntfy": {
+    "server": "https://ntfy.sh",
+    "topic": "YOUR_NTFY_TOPIC",
+    "priority": "default",
+    "tags": ["package", "delivery"]
+  }
+}
