@@ -59,19 +59,20 @@ class TCSTracker(BaseTracker):
             delivery_info = delivery_info_raw[0] if isinstance(delivery_info_raw, list) and delivery_info_raw else delivery_info_raw or {}
             checkpoints = response_data.get('checkpoints') or []
 
-            # Extract status
+            # Extract status - prefer the most recent checkpoint (newest first),
+            # not the shipmentsummary marketing text ("Dear Customer ... in Transit").
             status = delivery_info.get('currentStatus', '') or \
-                     shipment_info.get('status', '') or \
-                     response_data.get('shipmentsummary', 'Unknown')
+                     shipment_info.get('status', '') or ''
 
             if not status or status == 'Unknown':
-                # Try to get status from checkpoints
-                if checkpoints:
-                    status = checkpoints[0].get('status', 'Unknown')
+                if checkpoints and checkpoints[0].get('status'):
+                    status = checkpoints[0].get('status', '')
+                else:
+                    status = response_data.get('shipmentsummary', 'Unknown')
 
             # Extract location
             location = delivery_info.get('currentLocation', '') or \
-                       shipment_info.get('destination', 'N/A')
+                       shipment_info.get('destination', '')
 
             # Parse history from checkpoints
             history = []
@@ -79,8 +80,17 @@ class TCSTracker(BaseTracker):
                 history.append({
                     'timestamp': cp.get('datetime', cp.get('statusDate', '')),
                     'status': cp.get('status', ''),
-                    'location': cp.get('location', '')
+                    'location': cp.get('recievedby') or ''
                 })
+
+            # Fall back to the latest checkpoint's location if unknown
+            if not location or location == 'N/A':
+                for cp in checkpoints:
+                    if cp.get('recievedby'):
+                        location = cp.get('recievedby')
+                        break
+            if not location:
+                location = 'N/A' 
 
             delivered = 'delivered' in str(status).lower() or 'received' in str(status).lower()
 
