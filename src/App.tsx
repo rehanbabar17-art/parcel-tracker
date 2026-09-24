@@ -624,11 +624,20 @@ export default function App() {
                           >
                             {meta.label}
                           </span>
-                          {parcel.state?.delivered_at && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              Delivered
-                            </span>
-                          )}
+                          {parcel.state?.delivered_at && (() => {
+                            const hoursRemaining = Math.max(
+                              0,
+                              Math.round(48 - (Date.now() - new Date(parcel.state.delivered_at).getTime()) / (1000 * 3600))
+                            );
+                            return (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                title={`Delivered on ${new Date(parcel.state.delivered_at).toLocaleString()}. Will automatically be removed after 48h.`}
+                              >
+                                Delivered ({hoursRemaining}h left)
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">

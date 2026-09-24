@@ -11,7 +11,8 @@ import {
   trackAllParcels,
   sendNtfy,
   buildSummary,
-  notifyParcel
+  notifyParcel,
+  removeDeliveredParcels
 } from './src/server/engine.ts';
 import { trackParcel } from './src/server/trackers/index.ts';
 import type { CourierName, ParcelConfig } from './src/server/trackers/types.ts';
@@ -49,14 +50,19 @@ async function startServer() {
     const config = getConfig();
     const state = getState();
 
-    const parcelsWithState = config.trackers.map((p) => {
-      const key = `${p.courier}:${p.tracking_number}`;
-      const entry = state[key] || {};
-      return {
-        ...p,
-        state: entry
-      };
-    });
+    // Run 48h check on read as well
+    removeDeliveredParcels(config, state);
+
+    const parcelsWithState = config.trackers
+      .filter((p) => !state[`${p.courier}:${p.tracking_number}`]?.removed)
+      .map((p) => {
+        const key = `${p.courier}:${p.tracking_number}`;
+        const entry = state[key] || {};
+        return {
+          ...p,
+          state: entry
+        };
+      });
 
     res.json({
       parcels: parcelsWithState,

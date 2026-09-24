@@ -180,9 +180,18 @@ export function removeDeliveredParcels(config: AppConfig, state: TrackingState):
   const now = new Date();
   let count = 0;
 
-  for (const parcel of config.trackers) {
+  const toRemoveIndices: number[] = [];
+
+  for (let i = 0; i < config.trackers.length; i++) {
+    const parcel = config.trackers[i];
     const parcelKey = `${parcel.courier}:${parcel.tracking_number}`;
     const entry = state[parcelKey];
+
+    // If parcel is marked delivered but delivered_at wasn't set, initialize it
+    if (entry?.status?.toLowerCase().includes('delivered') && !entry.delivered_at) {
+      entry.delivered_at = new Date().toISOString();
+    }
+
     if (entry?.delivered_at) {
       const deliveredTime = new Date(entry.delivered_at);
       const hoursSinceDelivery = (now.getTime() - deliveredTime.getTime()) / (1000 * 3600);
@@ -194,10 +203,19 @@ export function removeDeliveredParcels(config: AppConfig, state: TrackingState):
           last_checked: new Date().toISOString(),
           removed: true
         };
+        toRemoveIndices.push(i);
         count++;
+        console.log(`[Engine] Parcel delivered over 48h ago, auto-removed from active tracking: ${parcel.name} (${parcel.courier.toUpperCase()} #${parcel.tracking_number})`);
       }
     }
   }
+
+  if (toRemoveIndices.length > 0) {
+    config.trackers = config.trackers.filter((_, idx) => !toRemoveIndices.includes(idx));
+    saveConfig(config);
+    saveState(state);
+  }
+
   return count;
 }
 
