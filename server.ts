@@ -12,9 +12,9 @@ import {
   sendNtfy,
   buildSummary,
   notifyParcel
-} from './src/server/engine.js';
-import { trackParcel } from './src/server/trackers/index.js';
-import { CourierName, ParcelConfig } from './src/server/trackers/types.js';
+} from './src/server/engine.ts';
+import { trackParcel } from './src/server/trackers/index.ts';
+import type { CourierName, ParcelConfig } from './src/server/trackers/types.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

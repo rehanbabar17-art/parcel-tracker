@@ -1,4 +1,4 @@
-import { TrackingResult, HistoryItem } from './types.js';
+import type { TrackingResult, HistoryItem } from './types.ts';
 
 const STATUS_MAP: Record<string, string> = {
   "package_created": "Package Created",

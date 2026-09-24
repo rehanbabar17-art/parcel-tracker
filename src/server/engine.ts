@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
+import type {
   AppConfig,
   CourierName,
   HistoryItem,
@@ -10,8 +10,8 @@ import {
   StatusChange,
   TrackingResult,
   TrackingState
-} from './trackers/types.js';
-import { trackParcel } from './trackers/index.js';
+} from './trackers/types.ts';
+import { trackParcel } from './trackers/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

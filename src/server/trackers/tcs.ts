@@ -1,4 +1,4 @@
-import { TrackingResult, HistoryItem } from './types.js';
+import type { TrackingResult, HistoryItem } from './types.ts';
 
 export async function trackTCS(trackingNumber: string): Promise<TrackingResult> {
   const url = "https://www.tcsexpress.com/apibridge";

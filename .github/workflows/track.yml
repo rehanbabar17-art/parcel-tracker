@@ -31,7 +31,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci || npm install
 
       # Restore the previous tracking state (statuses we already notified about).
       # A new cache entry is written on every run, and the newest one is restored.

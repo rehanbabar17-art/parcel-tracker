@@ -1,4 +1,4 @@
-import { TrackingResult, HistoryItem } from './types.js';
+import type { TrackingResult, HistoryItem } from './types.ts';
 
 export async function trackLeopards(trackingNumber: string): Promise<TrackingResult> {
   const baseUrls = [

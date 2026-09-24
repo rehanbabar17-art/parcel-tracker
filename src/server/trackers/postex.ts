@@ -1,4 +1,4 @@
-import { TrackingResult, HistoryItem } from './types.js';
+import type { TrackingResult, HistoryItem } from './types.ts';
 
 export async function trackPostEx(trackingNumber: string): Promise<TrackingResult> {
   const url = "https://postex.pk/api/tracking-order";

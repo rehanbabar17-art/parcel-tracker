@@ -1,11 +1,11 @@
-import { CourierName, TrackingResult } from './types.js';
-import { trackDEX } from './dex.js';
-import { trackTCS } from './tcs.js';
-import { trackPostEx } from './postex.js';
-import { trackTrax } from './trax.js';
-import { trackLeopards } from './leopards.js';
+import type { CourierName, TrackingResult } from './types.ts';
+import { trackDEX } from './dex.ts';
+import { trackTCS } from './tcs.ts';
+import { trackPostEx } from './postex.ts';
+import { trackTrax } from './trax.ts';
+import { trackLeopards } from './leopards.ts';
 
-export * from './types.js';
+export type * from './types.ts';
 
 export async function trackParcel(courier: CourierName, trackingNumber: string): Promise<TrackingResult> {
   const normCourier = courier.toLowerCase().trim() as CourierName;

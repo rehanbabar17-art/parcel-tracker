@@ -1,4 +1,4 @@
-import { TrackingResult, HistoryItem } from './types.js';
+import type { TrackingResult, HistoryItem } from './types.ts';
 
 export async function trackTrax(trackingNumber: string): Promise<TrackingResult> {
   const url = `https://sonic.pk/api/shipment/track/consignee/public?tracking_number=${encodeURIComponent(trackingNumber)}`;
