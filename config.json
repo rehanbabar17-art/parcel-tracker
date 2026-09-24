@@ -1,0 +1,15 @@
+{
+  "trackers": [
+    {
+      "name": "Veggie Cutter",
+      "courier": "tcs",
+      "tracking_number": "421001805332"
+    }
+  ],
+  "ntfy": {
+    "server": "https://ntfy.sh",
+    "topic": "YOUR_NTFY_TOPIC",
+    "priority": "default",
+    "tags": ["package", "delivery"]
+  }
+}
