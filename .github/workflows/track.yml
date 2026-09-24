@@ -24,15 +24,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: npm ci
 
       # Restore the previous tracking state (statuses we already notified about).
       # A new cache entry is written on every run, and the newest one is restored.
@@ -48,4 +47,4 @@ jobs:
       - name: Track parcels
         env:
           TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
-        run: python tracker.py
+        run: npm run track

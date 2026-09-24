@@ -4,6 +4,7 @@ config.json
 # Tracking state (statuses/locations) - persisted via GitHub Actions cache
 state.json
 
-# Python
-__pycache__/
-*.pyc
+# Node & Build artifacts
+node_modules/
+dist/
+.env

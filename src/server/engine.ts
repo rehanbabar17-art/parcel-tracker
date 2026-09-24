@@ -1,0 +1,371 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  AppConfig,
+  CourierName,
+  HistoryItem,
+  ParcelConfig,
+  StateEntry,
+  StatusChange,
+  TrackingResult,
+  TrackingState
+} from './trackers/types.js';
+import { trackParcel } from './trackers/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT_DIR = path.resolve(__dirname, '../..');
+
+const STATE_FILE = path.join(ROOT_DIR, 'state.json');
+const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
+
+// Default initial config if none exists
+const DEFAULT_CONFIG: AppConfig = {
+  trackers: [
+    {
+      "name": "Veggie Cutter",
+      "courier": "tcs",
+      "tracking_number": "421001805332"
+    }
+  ],
+  ntfy: {
+    server: "https://ntfy.sh",
+    topic: "parcel-tracker-rehanbabar",
+    priority: "default",
+    tags: ["package", "delivery"]
+  }
+};
+
+let inMemoryConfig: AppConfig = loadConfig();
+let inMemoryState: TrackingState = loadState();
+
+export function getConfig(): AppConfig {
+  return inMemoryConfig;
+}
+
+export function saveConfig(newConfig: AppConfig): AppConfig {
+  inMemoryConfig = newConfig;
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(newConfig, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Engine] Failed to write config.json:', err);
+  }
+  return inMemoryConfig;
+}
+
+export function getState(): TrackingState {
+  return inMemoryState;
+}
+
+export function loadConfig(): AppConfig {
+  if (process.env.TRACKER_CONFIG) {
+    try {
+      return JSON.parse(process.env.TRACKER_CONFIG);
+    } catch (e) {
+      console.warn('[Engine] Error parsing TRACKER_CONFIG env var:', e);
+    }
+  }
+
+  for (const name of ['config.json', 'config.example.json']) {
+    const p = path.join(ROOT_DIR, name);
+    if (fs.existsSync(p)) {
+      try {
+        const raw = fs.readFileSync(p, 'utf-8');
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn(`[Engine] Error reading ${name}:`, e);
+      }
+    }
+  }
+
+  return DEFAULT_CONFIG;
+}
+
+export function loadState(): TrackingState {
+  if (fs.existsSync(STATE_FILE)) {
+    try {
+      const raw = fs.readFileSync(STATE_FILE, 'utf-8');
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('[Engine] Error reading state.json:', e);
+    }
+  }
+  return {};
+}
+
+export function saveState(state: TrackingState) {
+  inMemoryState = state;
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Engine] Failed to write state.json:', err);
+  }
+}
+
+export function buildSummary(config: AppConfig, state: TrackingState): string {
+  const lines: string[] = [];
+  for (const parcel of config.trackers) {
+    const { name, courier, tracking_number } = parcel;
+    if (tracking_number.startsWith('YOUR_')) continue;
+
+    const parcelKey = `${courier}:${tracking_number}`;
+    const entry: Partial<StateEntry> = state[parcelKey] || {};
+    if (entry.removed) continue;
+
+    const status = entry.status || 'Unknown';
+    const location = entry.location || '';
+    const loc = location && location !== 'N/A' ? ` @ ${location}` : '';
+
+    const deliveredAt = entry.delivered_at;
+    if (deliveredAt && status.toLowerCase().includes('delivered')) {
+      lines.push(`  • ${name}: ${status}${loc} [Delivered]`);
+    } else {
+      lines.push(`  • ${name}: ${status}${loc}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+export function removeDeliveredParcels(config: AppConfig, state: TrackingState): number {
+  const now = new Date();
+  let count = 0;
+
+  for (const parcel of config.trackers) {
+    const parcelKey = `${parcel.courier}:${parcel.tracking_number}`;
+    const entry = state[parcelKey];
+    if (entry?.delivered_at) {
+      const deliveredTime = new Date(entry.delivered_at);
+      const hoursSinceDelivery = (now.getTime() - deliveredTime.getTime()) / (1000 * 3600);
+
+      if (hoursSinceDelivery >= 48) {
+        state[parcelKey] = {
+          ...entry,
+          status: entry.status || 'Delivered',
+          last_checked: new Date().toISOString(),
+          removed: true
+        };
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+export async function sendNtfy(
+  config: AppConfig,
+  title: string,
+  message: string,
+  priority = 'default',
+  tags = ['package']
+): Promise<boolean> {
+  if (process.env.TRACKER_SILENT === '1') {
+    console.log(`[ntfy SILENT] Would send: ${title}`);
+    return true;
+  }
+
+  const server = config.ntfy?.server || 'https://ntfy.sh';
+  const topic = config.ntfy?.topic;
+  if (!topic || topic.startsWith('YOUR_')) {
+    console.warn('[ntfy] Skipped: topic not configured.');
+    return false;
+  }
+
+  const url = `${server.replace(/\/$/, '')}/${topic}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Title': title,
+        'Priority': priority,
+        'Tags': tags.join(','),
+        'Content-Type': 'text/plain; charset=utf-8'
+      },
+      body: message
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('[ntfy] Error sending notification:', err);
+    return false;
+  }
+}
+
+export async function trackAllParcels(options?: { sendNotifications?: boolean }): Promise<{
+  changes: StatusChange[];
+  errors: Array<{ name: string; tracking_number: string; error: string }>;
+  summary: string;
+  timestamp: string;
+}> {
+  const config = getConfig();
+  const state = getState();
+  const shouldNotify = options?.sendNotifications !== false;
+
+  removeDeliveredParcels(config, state);
+
+  const changes: StatusChange[] = [];
+  const errors: Array<{ name: string; tracking_number: string; error: string }> = [];
+
+  for (const parcel of config.trackers) {
+    const { name, courier, tracking_number } = parcel;
+    if (tracking_number.startsWith('YOUR_')) continue;
+
+    const parcelKey = `${courier}:${tracking_number}`;
+    if (state[parcelKey]?.removed) {
+      continue;
+    }
+
+    try {
+      const result = await trackParcel(courier, tracking_number);
+      const previousStatus = state[parcelKey]?.status || '';
+      const currentStatus = result.status || '';
+      const isDelivered = result.delivered;
+
+      if (result.error) {
+        if (previousStatus !== `ERROR:${result.error}`) {
+          errors.push({ name, tracking_number, error: result.error });
+          state[parcelKey] = {
+            status: `ERROR:${result.error}`,
+            last_checked: new Date().toISOString()
+          };
+        }
+      } else if (currentStatus !== previousStatus) {
+        changes.push({
+          name,
+          courier,
+          tracking_number,
+          result,
+          previous_status: previousStatus || 'New Parcel'
+        });
+
+        state[parcelKey] = {
+          status: currentStatus,
+          last_checked: new Date().toISOString(),
+          location: result.location || 'N/A',
+          history: result.history,
+          customer: result.customer
+        };
+
+        if (isDelivered && !state[parcelKey].delivered_at) {
+          state[parcelKey].delivered_at = new Date().toISOString();
+        }
+      } else {
+        // Updated last checked and refresh history
+        state[parcelKey] = {
+          ...state[parcelKey],
+          last_checked: new Date().toISOString(),
+          location: result.location || state[parcelKey]?.location,
+          history: result.history || state[parcelKey]?.history,
+          customer: result.customer || state[parcelKey]?.customer
+        };
+      }
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      errors.push({ name, tracking_number, error: errMsg });
+      state[parcelKey] = {
+        status: `ERROR:${errMsg}`,
+        last_checked: new Date().toISOString()
+      };
+    }
+  }
+
+  saveState(state);
+  const summary = buildSummary(config, state);
+
+  if (shouldNotify && changes.length > 0) {
+    for (const change of changes) {
+      const { result, name, tracking_number } = change;
+      let message = `Tracking: ${tracking_number}\nStatus: ${result.status}\n`;
+      if (result.location && result.location !== 'N/A') {
+        message += `Location: ${result.location}\n`;
+      }
+      if (result.history && result.history.length > 0) {
+        message += `\nRecent:\n`;
+        for (const h of result.history.slice(0, 2)) {
+          message += `  ${h.timestamp}: ${h.status}\n`;
+        }
+      }
+      message += `\n--- All Parcels ---\n${summary}`;
+
+      let priority = 'default';
+      const tags = ['package', 'delivery'];
+      const statusLower = result.status.toLowerCase();
+      let title = `UPDATE: ${name}`;
+
+      if (statusLower.includes('delivered')) {
+        priority = 'high';
+        tags.push('white_check_mark');
+        title = `DELIVERED: ${name}`;
+      } else if (statusLower.includes('out for delivery') || statusLower.includes('about to deliver')) {
+        priority = 'high';
+        tags.push('truck');
+        title = `OUT FOR DELIVERY: ${name}`;
+      } else if (statusLower.includes('departing') || statusLower.includes('dispatched')) {
+        title = `IN TRANSIT: ${name}`;
+      }
+
+      await sendNtfy(config, title, message, priority, tags);
+    }
+  }
+
+  if (shouldNotify && errors.length > 0) {
+    for (const err of errors) {
+      const message = `Tracking: ${err.tracking_number}\nError: ${err.error}\n\n--- All Parcels ---\n${summary}`;
+      await sendNtfy(config, `TRACKING ERROR: ${err.name}`, message, 'high', ['warning', 'package']);
+    }
+  }
+
+  return {
+    changes,
+    errors,
+    summary,
+    timestamp: new Date().toISOString()
+  };
+}
+
+export async function notifyParcel(
+  name: string,
+  courier: string,
+  tracking_number: string,
+  status: string,
+  location?: string,
+  history?: HistoryItem[]
+): Promise<boolean> {
+  const config = getConfig();
+  const state = getState();
+  const summary = buildSummary(config, state);
+
+  let message = `Tracking: ${tracking_number}\nCourier: ${courier.toUpperCase()}\nStatus: ${status}\n`;
+  if (location && location !== 'N/A') {
+    message += `Location: ${location}\n`;
+  }
+  if (history && history.length > 0) {
+    message += `\nRecent Checkpoints:\n`;
+    for (const h of history.slice(0, 3)) {
+      message += `  • ${h.timestamp || 'Scan'}: ${h.status}\n`;
+    }
+  }
+  message += `\n--- All Tracked Parcels ---\n${summary}`;
+
+  let priority = 'default';
+  const tags = ['package', 'delivery'];
+  const statusLower = status.toLowerCase();
+  let title = `UPDATE: ${name}`;
+
+  if (statusLower.includes('delivered')) {
+    priority = 'high';
+    tags.push('white_check_mark');
+    title = `DELIVERED: ${name}`;
+  } else if (statusLower.includes('out for delivery') || statusLower.includes('about to deliver')) {
+    priority = 'high';
+    tags.push('truck');
+    title = `OUT FOR DELIVERY: ${name}`;
+  } else if (statusLower.includes('departing') || statusLower.includes('dispatched')) {
+    title = `IN TRANSIT: ${name}`;
+  } else if (statusLower.includes('awaiting') || statusLower.includes('no data') || statusLower.includes('booking')) {
+    title = `TRACKING ACTIVE: ${name}`;
+    tags.push('hourglass');
+  }
+
+  return sendNtfy(config, title, message, priority, tags);
+}
+
