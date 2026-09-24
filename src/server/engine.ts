@@ -58,16 +58,24 @@ export function getState(): TrackingState {
 }
 
 export function loadConfig(): AppConfig {
+  const trackers: ParcelConfig[] = [];
+  let ntfy = {
+    server: "https://ntfy.sh",
+    topic: "parcel-tracker-rehanbabar",
+    priority: "default",
+    tags: ["package", "delivery"]
+  };
+
+  // 1. Ingest from TRACKER_CONFIG environment variable (from GitHub Secrets)
   if (process.env.TRACKER_CONFIG) {
     try {
       const parsed = JSON.parse(process.env.TRACKER_CONFIG);
-      if (parsed && Array.isArray(parsed.trackers)) {
-        const realTrackers = parsed.trackers.filter((t: any) => !t.tracking_number?.startsWith('YOUR_'));
-        if (realTrackers.length > 0) {
-          return {
-            ...parsed,
-            trackers: realTrackers
-          };
+      if (parsed?.ntfy?.topic) ntfy = parsed.ntfy;
+      if (Array.isArray(parsed?.trackers)) {
+        for (const t of parsed.trackers) {
+          if (t && t.tracking_number && !String(t.tracking_number).startsWith('YOUR_')) {
+            trackers.push(t);
+          }
         }
       }
     } catch (e) {
@@ -75,18 +83,18 @@ export function loadConfig(): AppConfig {
     }
   }
 
+  // 2. Ingest from config.json (internal cache or local config)
   const configPath = path.join(ROOT_DIR, 'config.json');
   if (fs.existsSync(configPath)) {
     try {
       const raw = fs.readFileSync(configPath, 'utf-8');
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.trackers)) {
-        const realTrackers = parsed.trackers.filter((t: any) => !t.tracking_number?.startsWith('YOUR_'));
-        if (realTrackers.length > 0) {
-          return {
-            ...parsed,
-            trackers: realTrackers
-          };
+      if (parsed?.ntfy?.topic) ntfy = parsed.ntfy;
+      if (Array.isArray(parsed?.trackers)) {
+        for (const t of parsed.trackers) {
+          if (t && t.tracking_number && !String(t.tracking_number).startsWith('YOUR_')) {
+            trackers.push(t);
+          }
         }
       }
     } catch (e) {
@@ -94,7 +102,33 @@ export function loadConfig(): AppConfig {
     }
   }
 
-  return DEFAULT_CONFIG;
+  // Deduplicate by courier:tracking_number
+  const seen = new Set<string>();
+  const mergedTrackers: ParcelConfig[] = [];
+  for (const t of trackers) {
+    const key = `${t.courier}:${t.tracking_number}`.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      mergedTrackers.push(t);
+    }
+  }
+
+  // Ensure Veggie Cutter is ALWAYS included by default
+  const hasVeggie = mergedTrackers.some(
+    t => String(t.tracking_number).trim() === '421001805332' || t.name.toLowerCase().includes('veggie')
+  );
+  if (!hasVeggie) {
+    mergedTrackers.push({
+      name: 'Veggie Cutter',
+      courier: 'tcs',
+      tracking_number: '421001805332'
+    });
+  }
+
+  return {
+    trackers: mergedTrackers,
+    ntfy
+  };
 }
 
 export function loadState(): TrackingState {
