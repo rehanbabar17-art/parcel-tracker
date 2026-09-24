@@ -4,14 +4,45 @@ on:
   schedule:
     - cron: '0 * * * *'  # Every hour - GitHub's built-in schedule
 
-  workflow_dispatch:  # Manual trigger (Actions tab)
+  workflow_dispatch:  # Manual trigger with interactive parcel management
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'track'
+        type: choice
+        options:
+          - track
+          - add_parcel
+          - remove_parcel
+          - list_parcels
+      parcel_name:
+        description: 'Parcel Name (if adding or removing)'
+        required: false
+        type: string
+      courier:
+        description: 'Courier'
+        required: false
+        default: 'tcs'
+        type: choice
+        options:
+          - tcs
+          - leopards
+          - postex
+          - daraz
+          - dex
+          - trax
+      tracking_number:
+        description: 'Tracking Number (if adding)'
+        required: false
+        type: string
 
   repository_dispatch:  # Triggered by 3rd-party cron (cron-job.org etc.)
     types: [hourly-track]
 
 permissions:
   contents: read   # Public repo: code only, never writes back
-  actions: write   # Needed to save/restore the tracking-state cache
+  actions: write   # Needed to save/restore the private parcel cache
 
 jobs:
   track:
@@ -33,18 +64,31 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      # Restore the previous tracking state (statuses we already notified about).
-      # A new cache entry is written on every run, and the newest one is restored.
-      - name: Restore tracking state
+      # Restore previous tracking state & config from GitHub Actions internal cache.
+      # This keeps all tracking IDs and history in GitHub's cache - never in public git.
+      - name: Restore tracking state and config from cache
         uses: actions/cache@v4
         with:
-          path: state.json
-          key: parcel-state-${{ github.run_id }}
+          path: |
+            state.json
+            config.json
+          key: parcel-cache-${{ github.run_id }}
           restore-keys: |
+            parcel-cache-
             parcel-state-
           save-always: true
 
-      - name: Track parcels
+      # Manage parcels or seed initial configuration
+      - name: Manage parcel configuration
         env:
+          ACTION: ${{ github.event.inputs.action || 'track' }}
+          PARCEL_NAME: ${{ github.event.inputs.parcel_name || '' }}
+          COURIER: ${{ github.event.inputs.courier || '' }}
+          TRACKING_NUMBER: ${{ github.event.inputs.tracking_number || '' }}
           TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
+        run: npm run manage
+
+      # Track active parcels and send push notifications
+      - name: Track parcels
         run: npm run track
+
