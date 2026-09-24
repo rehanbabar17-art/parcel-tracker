@@ -20,22 +20,21 @@ const ROOT_DIR = path.resolve(__dirname, '../..');
 const STATE_FILE = path.join(ROOT_DIR, 'state.json');
 const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 
-// Default initial config if none exists
+// Default initial config if none exists (safe generic placeholder - secrets belong in config.json or GitHub Secrets)
 const DEFAULT_CONFIG: AppConfig = {
-  trackers: [
-    {
-      "name": "Veggie Cutter",
-      "courier": "tcs",
-      "tracking_number": "421001805332"
-    }
-  ],
+  trackers: [],
   ntfy: {
     server: "https://ntfy.sh",
-    topic: "parcel-tracker-rehanbabar",
+    topic: "parcel-tracker",
     priority: "default",
     tags: ["package", "delivery"]
   }
 };
+
+function maskNumber(num: string): string {
+  if (!num || num.length <= 6) return '****';
+  return `${num.slice(0, 4)}****${num.slice(-2)}`;
+}
 
 let inMemoryConfig: AppConfig = loadConfig();
 let inMemoryState: TrackingState = loadState();
@@ -61,21 +60,37 @@ export function getState(): TrackingState {
 export function loadConfig(): AppConfig {
   if (process.env.TRACKER_CONFIG) {
     try {
-      return JSON.parse(process.env.TRACKER_CONFIG);
+      const parsed = JSON.parse(process.env.TRACKER_CONFIG);
+      if (parsed && Array.isArray(parsed.trackers)) {
+        const realTrackers = parsed.trackers.filter((t: any) => !t.tracking_number?.startsWith('YOUR_'));
+        if (realTrackers.length > 0) {
+          return {
+            ...parsed,
+            trackers: realTrackers
+          };
+        }
+      }
     } catch (e) {
       console.warn('[Engine] Error parsing TRACKER_CONFIG env var:', e);
     }
   }
 
-  for (const name of ['config.json', 'config.example.json']) {
-    const p = path.join(ROOT_DIR, name);
-    if (fs.existsSync(p)) {
-      try {
-        const raw = fs.readFileSync(p, 'utf-8');
-        return JSON.parse(raw);
-      } catch (e) {
-        console.warn(`[Engine] Error reading ${name}:`, e);
+  const configPath = path.join(ROOT_DIR, 'config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const raw = fs.readFileSync(configPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.trackers)) {
+        const realTrackers = parsed.trackers.filter((t: any) => !t.tracking_number?.startsWith('YOUR_'));
+        if (realTrackers.length > 0) {
+          return {
+            ...parsed,
+            trackers: realTrackers
+          };
+        }
       }
+    } catch (e) {
+      console.warn(`[Engine] Error reading config.json:`, e);
     }
   }
 
@@ -205,14 +220,22 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
   const changes: StatusChange[] = [];
   const errors: Array<{ name: string; tracking_number: string; error: string }> = [];
 
+  console.log(`\n📦 [${new Date().toISOString()}] Tracking ${config.trackers.length} parcel(s)...`);
+
   for (const parcel of config.trackers) {
     const { name, courier, tracking_number } = parcel;
-    if (tracking_number.startsWith('YOUR_')) continue;
+    if (tracking_number.startsWith('YOUR_')) {
+      console.log(`  [SKIP] Placeholder parcel: ${name}`);
+      continue;
+    }
 
     const parcelKey = `${courier}:${tracking_number}`;
     if (state[parcelKey]?.removed) {
+      console.log(`  [SKIP] Parcel removed from active tracking: ${name}`);
       continue;
     }
+
+    console.log(`\nChecking: ${name} (${courier.toUpperCase()} #${maskNumber(tracking_number)})`);
 
     try {
       const result = await trackParcel(courier, tracking_number);
@@ -221,6 +244,7 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
       const isDelivered = result.delivered;
 
       if (result.error) {
+        console.log(`  [ERROR] ${result.error}`);
         if (previousStatus !== `ERROR:${result.error}`) {
           errors.push({ name, tracking_number, error: result.error });
           state[parcelKey] = {
@@ -229,6 +253,7 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           };
         }
       } else if (currentStatus !== previousStatus) {
+        console.log(`  [STATUS CHANGED] "${previousStatus || 'New'}" -> "${currentStatus}" (Location: ${result.location || 'N/A'})`);
         changes.push({
           name,
           courier,
@@ -249,6 +274,7 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           state[parcelKey].delivered_at = new Date().toISOString();
         }
       } else {
+        console.log(`  [NO CHANGE] Current status: "${currentStatus}" (Location: ${result.location || 'N/A'})`);
         // Updated last checked and refresh history
         state[parcelKey] = {
           ...state[parcelKey],
@@ -260,6 +286,7 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
       }
     } catch (err: any) {
       const errMsg = err.message || String(err);
+      console.error(`  [EXCEPTION] ${errMsg}`);
       errors.push({ name, tracking_number, error: errMsg });
       state[parcelKey] = {
         status: `ERROR:${errMsg}`,

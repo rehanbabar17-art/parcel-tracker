@@ -1,4 +1,4 @@
-# Local config with real tracking numbers + ntfy topic - never commit
+# Sensitive local config with tracking numbers & private ntfy topic - never commit to public repo
 config.json
 
 # Tracking state (statuses/locations) - persisted via GitHub Actions cache
