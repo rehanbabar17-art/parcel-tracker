@@ -207,35 +207,51 @@ export async function sendNtfy(
   message: string,
   priority = 'default',
   tags = ['package']
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   if (process.env.TRACKER_SILENT === '1') {
     console.log(`[ntfy SILENT] Would send: ${title}`);
-    return true;
+    return { success: true };
   }
 
   const server = config.ntfy?.server || 'https://ntfy.sh';
   const topic = config.ntfy?.topic;
   if (!topic || topic.startsWith('YOUR_')) {
     console.warn('[ntfy] Skipped: topic not configured.');
-    return false;
+    return { success: false, error: 'Topic not configured' };
   }
+
+  // Strip non-ASCII characters from Title/Tags HTTP headers to prevent node fetch header exceptions
+  const cleanTitle = title.replace(/[^\x20-\x7E]/g, '').trim() || 'Parcel Update';
+  const cleanTags = tags.map(t => t.replace(/[^\x20-\x7E]/g, '')).filter(Boolean).join(',');
 
   const url = `${server.replace(/\/$/, '')}/${topic}`;
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Title': title,
+        'Title': cleanTitle,
         'Priority': priority,
-        'Tags': tags.join(','),
+        'Tags': cleanTags,
         'Content-Type': 'text/plain; charset=utf-8'
       },
       body: message
     });
-    return res.ok;
-  } catch (err) {
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let parsedMsg = errText;
+      try {
+        const json = JSON.parse(errText);
+        if (json.error) parsedMsg = json.error;
+      } catch {}
+      console.warn(`[ntfy] Notification failed (${res.status} ${res.statusText}): ${parsedMsg}`);
+      return { success: false, error: `${res.status} ${res.statusText}: ${parsedMsg}` };
+    }
+    console.log(`[ntfy] Notification successfully sent to topic: ${topic}`);
+    return { success: true };
+  } catch (err: any) {
     console.error('[ntfy] Error sending notification:', err);
-    return false;
+    return { success: false, error: err.message || String(err) };
   }
 }
 
@@ -390,7 +406,7 @@ export async function notifyParcel(
   status: string,
   location?: string,
   history?: HistoryItem[]
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   const config = getConfig();
   const state = getState();
   const summary = buildSummary(config, state);

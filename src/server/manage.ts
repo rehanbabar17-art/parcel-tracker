@@ -5,7 +5,7 @@ import type { AppConfig, CourierName, ParcelConfig } from './trackers/types.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT_DIR = path.resolve(__dirname, '../../..');
+const ROOT_DIR = path.resolve(__dirname, '../..');
 const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 
 function maskNumber(num: string): string {

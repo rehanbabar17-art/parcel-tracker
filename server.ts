@@ -135,7 +135,7 @@ async function startServer() {
       };
       saveState(state);
 
-      const sent = await notifyParcel(
+      const notifyRes = await notifyParcel(
         parcel.name,
         parcel.courier,
         parcel.tracking_number,
@@ -143,7 +143,7 @@ async function startServer() {
         result.location,
         result.history
       );
-      res.json({ success: sent, result });
+      res.json({ success: notifyRes.success, error: notifyRes.error, result });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Notification failed' });
     }
@@ -214,14 +214,14 @@ async function startServer() {
   app.post('/api/ntfy/test', async (req, res) => {
     const config = getConfig();
     const { message, title, priority } = req.body || {};
-    const success = await sendNtfy(
+    const notifyRes = await sendNtfy(
       config,
       title || 'Test Notification from Parcel Tracker',
       message || 'Parcel Tracker ntfy integration is working properly! 📦',
       priority || 'default',
       ['white_check_mark', 'package']
     );
-    res.json({ success });
+    res.json(notifyRes);
   });
 
   app.get('/api/state', (req, res) => {

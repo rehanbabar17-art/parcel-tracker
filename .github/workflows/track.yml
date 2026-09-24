@@ -90,5 +90,7 @@ jobs:
 
       # Track active parcels and send push notifications
       - name: Track parcels
+        env:
+          TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
         run: npm run track
 

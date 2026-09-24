@@ -76,6 +76,7 @@ export default function App() {
   const [trackingSingle, setTrackingSingle] = useState<string | null>(null);
   const [notifyingKey, setNotifyingKey] = useState<string | null>(null);
   const [notifySuccessKey, setNotifySuccessKey] = useState<string | null>(null);
+  const [notifyErrorKey, setNotifyErrorKey] = useState<{ key: string; error: string } | null>(null);
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -167,6 +168,7 @@ export default function App() {
   const handleNotifyParcel = async (courier: string, trackingNumber: string) => {
     const key = `${courier}:${trackingNumber}`;
     setNotifyingKey(key);
+    setNotifyErrorKey(null);
     try {
       const res = await fetch(`/api/parcels/${courier}/${trackingNumber}/notify`, {
         method: 'POST'
@@ -175,10 +177,15 @@ export default function App() {
       if (data.success) {
         setNotifySuccessKey(key);
         setTimeout(() => setNotifySuccessKey(null), 3000);
+      } else {
+        setNotifyErrorKey({ key, error: data.error || 'Failed to send notification' });
+        setTimeout(() => setNotifyErrorKey(null), 5000);
       }
       await fetchParcels();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Notify parcel failed:', err);
+      setNotifyErrorKey({ key, error: err.message || 'Network error' });
+      setTimeout(() => setNotifyErrorKey(null), 5000);
     } finally {
       setNotifyingKey(null);
     }
@@ -273,7 +280,7 @@ export default function App() {
       if (data.success) {
         setNtfyMsg('Notification sent successfully!');
       } else {
-        setNtfyMsg('Failed to send. Please verify topic name.');
+        setNtfyMsg(`Failed: ${data.error || 'Please verify topic name.'}`);
       }
     } catch {
       setNtfyMsg('Connection error sending notification');
@@ -717,6 +724,22 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Error Banner for Notification */}
+                    {notifyErrorKey?.key === key && (
+                      <div className="mt-2 p-2 bg-red-900/30 border border-red-500/40 rounded-lg text-red-300 text-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                          <span>Notification Error: {notifyErrorKey.error}</span>
+                        </div>
+                        <button
+                          onClick={() => setNotifyErrorKey(null)}
+                          className="text-red-400 hover:text-red-200 text-xs px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
 
                     {/* Expandable History Timeline */}
                     {isExpanded && (
