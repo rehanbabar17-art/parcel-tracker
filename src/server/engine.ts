@@ -136,6 +136,17 @@ export function loadConfig(): AppConfig {
     });
   }
 
+  const hasPamolive = mergedTrackers.some(
+    t => String(t.tracking_number).trim() === 'PK-DEX211483098' || t.name.toLowerCase().includes('pamolive')
+  );
+  if (!hasPamolive) {
+    mergedTrackers.push({
+      name: 'Pamolive Shampoo',
+      courier: 'dex',
+      tracking_number: 'PK-DEX211483098'
+    });
+  }
+
   return {
     trackers: mergedTrackers,
     ntfy

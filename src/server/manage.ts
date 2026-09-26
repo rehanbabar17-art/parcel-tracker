@@ -79,6 +79,18 @@ export function runManage(): void {
     console.log('[Manage] Automatically added Luna Watch (TCS #4210****95) to tracking list.');
   }
 
+  const hasPamolive = currentConfig.trackers.some(
+    t => t.tracking_number === 'PK-DEX211483098' || t.name.toLowerCase().includes('pamolive')
+  );
+  if (!hasPamolive) {
+    currentConfig.trackers.push({
+      name: 'Pamolive Shampoo',
+      courier: 'dex',
+      tracking_number: 'PK-DEX211483098'
+    });
+    console.log('[Manage] Automatically added Pamolive Shampoo (DEX #PK-DEX****98) to tracking list.');
+  }
+
   // Handle Action
   if (action === 'add_parcel') {
     if (!name || !trackingNumber) {
