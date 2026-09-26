@@ -54,7 +54,7 @@ export function runManage(): void {
     }
   }
 
-  // Ensure Veggie Cutter is present if no trackers exist or by default
+  // Ensure Veggie Cutter and Luna Watch are present if no trackers exist or by default
   const hasVeggie = currentConfig.trackers.some(
     t => t.tracking_number === '421001805332' || t.name.toLowerCase().includes('veggie')
   );
@@ -65,6 +65,18 @@ export function runManage(): void {
       tracking_number: '421001805332'
     });
     console.log('[Manage] Automatically added Veggie Cutter (TCS #4210****32) to tracking list.');
+  }
+
+  const hasLunaWatch = currentConfig.trackers.some(
+    t => t.tracking_number === '421001815195' || t.name.toLowerCase().includes('luna watch')
+  );
+  if (!hasLunaWatch) {
+    currentConfig.trackers.push({
+      name: 'Luna Watch',
+      courier: 'tcs',
+      tracking_number: '421001815195'
+    });
+    console.log('[Manage] Automatically added Luna Watch (TCS #4210****95) to tracking list.');
   }
 
   // Handle Action

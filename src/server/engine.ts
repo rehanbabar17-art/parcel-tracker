@@ -113,7 +113,7 @@ export function loadConfig(): AppConfig {
     }
   }
 
-  // Ensure Veggie Cutter is ALWAYS included by default
+  // Ensure Veggie Cutter and Luna Watch are included by default
   const hasVeggie = mergedTrackers.some(
     t => String(t.tracking_number).trim() === '421001805332' || t.name.toLowerCase().includes('veggie')
   );
@@ -122,6 +122,17 @@ export function loadConfig(): AppConfig {
       name: 'Veggie Cutter',
       courier: 'tcs',
       tracking_number: '421001805332'
+    });
+  }
+
+  const hasLunaWatch = mergedTrackers.some(
+    t => String(t.tracking_number).trim() === '421001815195' || t.name.toLowerCase().includes('luna watch')
+  );
+  if (!hasLunaWatch) {
+    mergedTrackers.push({
+      name: 'Luna Watch',
+      courier: 'tcs',
+      tracking_number: '421001815195'
     });
   }
 
