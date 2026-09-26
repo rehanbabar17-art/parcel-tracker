@@ -329,9 +329,22 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
 
     try {
       const result = await trackParcel(courier, tracking_number);
-      const previousStatus = state[parcelKey]?.status || '';
+      const existingEntry = state[parcelKey];
+      const previousStatus = existingEntry?.status || '';
+      const previousLocation = existingEntry?.location || '';
+      const previousLastEvent = existingEntry?.last_event_time || '';
+      
       const currentStatus = result.status || '';
+      const currentLocation = result.location || '';
+      const currentLastEvent = (result.history && result.history.length > 0 && result.history[0].timestamp) ? result.history[0].timestamp : '';
       const isDelivered = result.delivered;
+
+      const isFirstScan = !existingEntry || !existingEntry.notified_once;
+      const statusChanged = currentStatus !== previousStatus;
+      const locationChanged = Boolean(currentLocation && currentLocation !== 'N/A' && currentLocation !== previousLocation);
+      const eventTimeChanged = Boolean(currentLastEvent && currentLastEvent !== previousLastEvent);
+
+      const hasChanged = isFirstScan || statusChanged || locationChanged || eventTimeChanged;
 
       if (result.error) {
         console.log(`  [ERROR] ${result.error}`);
@@ -342,8 +355,8 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
             last_checked: new Date().toISOString()
           };
         }
-      } else if (currentStatus !== previousStatus) {
-        console.log(`  [STATUS CHANGED] "${previousStatus || 'New'}" -> "${currentStatus}" (Location: ${result.location || 'N/A'})`);
+      } else if (hasChanged) {
+        console.log(`  [STATUS UPDATED] "${previousStatus || 'New'}" -> "${currentStatus}" (Location: ${result.location || 'N/A'}, FirstScan: ${isFirstScan})`);
         changes.push({
           name,
           courier,
@@ -356,6 +369,8 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           status: currentStatus,
           last_checked: new Date().toISOString(),
           location: result.location || 'N/A',
+          last_event_time: currentLastEvent,
+          notified_once: true,
           history: result.history,
           customer: result.customer
         };
@@ -371,7 +386,8 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           last_checked: new Date().toISOString(),
           location: result.location || state[parcelKey]?.location,
           history: result.history || state[parcelKey]?.history,
-          customer: result.customer || state[parcelKey]?.customer
+          customer: result.customer || state[parcelKey]?.customer,
+          notified_once: true
         };
       }
     } catch (err: any) {
@@ -391,14 +407,21 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
   if (shouldNotify && changes.length > 0) {
     for (const change of changes) {
       const { result, name, tracking_number } = change;
-      let message = `Tracking: ${tracking_number}\nStatus: ${result.status}\n`;
+      const fullStatus = (result.location && result.location !== 'N/A' && !result.status.toLowerCase().includes(result.location.toLowerCase()))
+        ? `${result.status} @ ${result.location}`
+        : result.status;
+
+      let message = `Tracking: ${tracking_number}\nStatus: ${fullStatus}\n`;
       if (result.location && result.location !== 'N/A') {
         message += `Location: ${result.location}\n`;
       }
       if (result.history && result.history.length > 0) {
-        message += `\nRecent:\n`;
-        for (const h of result.history.slice(0, 2)) {
-          message += `  ${h.timestamp}: ${h.status}\n`;
+        message += `\nRecent History:\n`;
+        for (const h of result.history.slice(0, 3)) {
+          const hLoc = (h.location && h.location !== 'N/A' && !h.status.toLowerCase().includes(h.location.toLowerCase()))
+            ? ` @ ${h.location}`
+            : '';
+          message += `  • ${h.timestamp}: ${h.status}${hLoc}\n`;
         }
       }
       message += `\n--- All Parcels ---\n${summary}`;
@@ -406,18 +429,22 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
       let priority = 'default';
       const tags = ['package', 'delivery'];
       const statusLower = result.status.toLowerCase();
-      let title = `UPDATE: ${name}`;
+      let title = `UPDATE: ${name} (${fullStatus})`;
+
+      if (change.previous_status === 'New Parcel' || !change.previous_status) {
+        title = `TRACKING: ${name} (${fullStatus})`;
+      }
 
       if (statusLower.includes('delivered')) {
         priority = 'high';
         tags.push('white_check_mark');
-        title = `DELIVERED: ${name}`;
+        title = `DELIVERED: ${name} (${fullStatus})`;
       } else if (statusLower.includes('out for delivery') || statusLower.includes('about to deliver')) {
         priority = 'high';
         tags.push('truck');
-        title = `OUT FOR DELIVERY: ${name}`;
-      } else if (statusLower.includes('departing') || statusLower.includes('dispatched')) {
-        title = `IN TRANSIT: ${name}`;
+        title = `OUT FOR DELIVERY: ${name} (${fullStatus})`;
+      } else if (statusLower.includes('departing') || statusLower.includes('departed') || statusLower.includes('dispatched') || statusLower.includes('in transit')) {
+        title = `IN TRANSIT: ${name} (${fullStatus})`;
       }
 
       await sendNtfy(config, title, message, priority, tags);

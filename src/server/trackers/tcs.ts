@@ -103,23 +103,40 @@ export async function trackTCS(trackingNumber: string): Promise<TrackingResult> 
       status = "Awaiting First Scan (No Data Found yet)";
     }
 
-    let location = deliveryInfo.currentLocation || shipmentInfo.destination || "";
+    const checkpoints = Array.isArray(responseData.checkpoints) ? responseData.checkpoints : [];
+
+    let status = deliveryInfo.currentStatus || shipmentInfo.status || "";
+    if (!status || status === "Unknown") {
+      if (checkpoints.length > 0 && checkpoints[0].status) {
+        status = checkpoints[0].status;
+      } else {
+        const rawSummary = responseData.shipmentsummary || "Unknown";
+        if (rawSummary.includes("No Data Found") || rawSummary.includes("Invalid")) {
+          status = "Awaiting First Scan (No Data Found yet)";
+        } else {
+          status = rawSummary;
+        }
+      }
+    } else if (status.includes("No Data Found") || status.includes("Invalid")) {
+      status = "Awaiting First Scan (No Data Found yet)";
+    }
+
     const history: HistoryItem[] = [];
     for (const cp of checkpoints) {
       history.push({
         timestamp: cp.datetime || cp.statusDate || "",
         status: cp.status || "",
-        location: cp.recievedby || ""
+        location: cp.recievedby || cp.city || ""
       });
     }
 
-    if (!location || location === "N/A") {
-      for (const cp of checkpoints) {
-        if (cp.recievedby) {
-          location = cp.recievedby;
-          break;
-        }
-      }
+    let location = "";
+    if (checkpoints.length > 0 && checkpoints[0].recievedby) {
+      location = checkpoints[0].recievedby;
+    } else if (deliveryInfo.currentLocation) {
+      location = deliveryInfo.currentLocation;
+    } else if (shipmentInfo.destination) {
+      location = shipmentInfo.destination;
     }
     if (!location) location = "N/A";
 

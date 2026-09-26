@@ -40,6 +40,8 @@ export interface StateEntry {
   status: string;
   last_checked: string;
   location?: string;
+  last_event_time?: string;
+  notified_once?: boolean;
   delivered_at?: string;
   removed?: boolean;
   history?: HistoryItem[];
