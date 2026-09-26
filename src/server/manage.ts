@@ -24,7 +24,7 @@ export function runManage(): void {
     trackers: [],
     ntfy: {
       server: 'https://ntfy.sh',
-      topic: 'parcel-tracker-rehanbabar',
+      topic: 'CourierTracking_7f3a9c1d82b4e6f5a8d9c0e1f2b3a4',
       priority: 'default',
       tags: ['package', 'delivery']
     }
