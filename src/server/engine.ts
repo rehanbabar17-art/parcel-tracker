@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -25,7 +26,7 @@ const DEFAULT_CONFIG: AppConfig = {
   trackers: [],
   ntfy: {
     server: "https://ntfy.sh",
-    topic: "parcel-tracker",
+    topic: "",
     priority: "default",
     tags: ["package", "delivery"]
   }
@@ -193,7 +194,9 @@ export function removeDeliveredParcels(config: AppConfig, state: TrackingState):
         };
         toRemoveIndices.push(i);
         count++;
-        console.log(`[Engine] Parcel delivered over 48h ago, auto-removed from active tracking: ${parcel.name} (${parcel.courier.toUpperCase()} #${parcel.tracking_number})`);
+        if (process.env.GITHUB_ACTIONS !== 'true') {
+          console.log(`[Engine] Parcel delivered over 48h ago, auto-removed from active tracking: ${parcel.name}`);
+        }
       }
     }
   }
@@ -215,7 +218,7 @@ export async function sendNtfy(
   tags = ['package']
 ): Promise<{ success: boolean; error?: string }> {
   if (process.env.TRACKER_SILENT === '1') {
-    console.log(`[ntfy SILENT] Would send: ${title}`);
+    console.log('[ntfy SILENT] Notification suppressed by configuration.');
     return { success: true };
   }
 
@@ -250,12 +253,20 @@ export async function sendNtfy(
         const json = JSON.parse(errText);
         if (json.error) parsedMsg = json.error;
       } catch {}
+      if (process.env.GITHUB_ACTIONS === 'true') {
+        console.warn(`[ntfy] Notification failed (${res.status}).`);
+        return { success: false, error: `Notification failed (${res.status})` };
+      }
       console.warn(`[ntfy] Notification failed (${res.status} ${res.statusText}): ${parsedMsg}`);
       return { success: false, error: `${res.status} ${res.statusText}: ${parsedMsg}` };
     }
-    console.log(`[ntfy] Notification successfully sent to topic: ${topic}`);
+    console.log('[ntfy] Notification sent.');
     return { success: true };
   } catch (err: any) {
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.error('[ntfy] Notification request failed.');
+      return { success: false, error: 'Notification request failed' };
+    }
     console.error('[ntfy] Error sending notification:', err);
     return { success: false, error: err.message || String(err) };
   }
@@ -281,17 +292,19 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
   for (const parcel of config.trackers) {
     const { name, courier, tracking_number } = parcel;
     if (tracking_number.startsWith('YOUR_')) {
-      console.log(`  [SKIP] Placeholder parcel: ${name}`);
+      if (process.env.GITHUB_ACTIONS !== 'true') console.log('  [SKIP] Placeholder parcel.');
       continue;
     }
 
     const parcelKey = `${courier}:${tracking_number}`;
     if (state[parcelKey]?.removed) {
-      console.log(`  [SKIP] Parcel removed from active tracking: ${name}`);
+      if (process.env.GITHUB_ACTIONS !== 'true') console.log('  [SKIP] Parcel is no longer active.');
       continue;
     }
 
-    console.log(`\nChecking: ${name} (${courier.toUpperCase()} #${maskNumber(tracking_number)})`);
+    if (process.env.GITHUB_ACTIONS !== 'true') {
+      console.log(`\nChecking: ${name} (${courier.toUpperCase()} #${maskNumber(tracking_number)})`);
+    }
 
     try {
       const result = await trackParcel(courier, tracking_number);
@@ -313,7 +326,8 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
       const hasChanged = isFirstScan || statusChanged || locationChanged || eventTimeChanged;
 
       if (result.error) {
-        console.log(`  [ERROR] ${result.error}`);
+        if (process.env.GITHUB_ACTIONS === 'true') console.log('  [ERROR] Parcel lookup failed.');
+        else console.log(`  [ERROR] ${result.error}`);
         if (previousStatus !== `ERROR:${result.error}`) {
           errors.push({ name, tracking_number, error: result.error });
           state[parcelKey] = {
@@ -322,7 +336,9 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           };
         }
       } else if (hasChanged) {
-        console.log(`  [STATUS UPDATED] "${previousStatus || 'New'}" -> "${currentStatus}" (Location: ${result.location || 'N/A'}, FirstScan: ${isFirstScan})`);
+        if (process.env.GITHUB_ACTIONS !== 'true') {
+          console.log(`  [STATUS UPDATED] "${previousStatus || 'New'}" -> "${currentStatus}" (Location: ${result.location || 'N/A'}, FirstScan: ${isFirstScan})`);
+        }
         changes.push({
           name,
           courier,
@@ -345,7 +361,9 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
           state[parcelKey].delivered_at = new Date().toISOString();
         }
       } else {
-        console.log(`  [NO CHANGE] Current status: "${currentStatus}" (Location: ${result.location || 'N/A'})`);
+        if (process.env.GITHUB_ACTIONS !== 'true') {
+          console.log(`  [NO CHANGE] Current status: "${currentStatus}" (Location: ${result.location || 'N/A'})`);
+        }
         // Updated last checked and refresh history
         state[parcelKey] = {
           ...state[parcelKey],
@@ -358,7 +376,8 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
       }
     } catch (err: any) {
       const errMsg = err.message || String(err);
-      console.error(`  [EXCEPTION] ${errMsg}`);
+      if (process.env.GITHUB_ACTIONS === 'true') console.error('  [EXCEPTION] Parcel lookup failed.');
+      else console.error(`  [EXCEPTION] ${errMsg}`);
       errors.push({ name, tracking_number, error: errMsg });
       state[parcelKey] = {
         status: `ERROR:${errMsg}`,
@@ -478,4 +497,3 @@ export async function notifyParcel(
 
   return sendNtfy(config, title, message, priority, tags);
 }
-

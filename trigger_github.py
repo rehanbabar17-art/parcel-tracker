@@ -35,5 +35,4 @@ if resp.status_code == 204:
     print(f"Workflow triggered successfully for {OWNER}/{REPO} (event: {EVENT_TYPE})")
 else:
     print(f"Failed: HTTP {resp.status_code}")
-    print(resp.text)
     sys.exit(1)

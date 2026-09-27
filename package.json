@@ -8,6 +8,7 @@
     "lint": "tsc --noEmit",
     "mega:download": "tsx src/server/mega-sync.ts download",
     "mega:upload": "tsx src/server/mega-sync.ts upload",
+    "mega:initialize": "tsx src/server/mega-sync.ts initialize",
     "track": "tsx -e \"import { trackAllParcels } from './src/server/engine.ts'; trackAllParcels().then(() => process.exit(0));\"",
     "manage": "tsx src/server/manage.ts",
     "start": "node server.ts"

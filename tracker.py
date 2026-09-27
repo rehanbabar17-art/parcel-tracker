@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import requests
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
 from trackers import get_tracker
 
@@ -308,7 +309,7 @@ def track_all():
     return changes
 
 
-def main():
+def _main():
     try:
         changes = track_all()
     except Exception as e:
@@ -327,6 +328,15 @@ def main():
         except:
             pass
         sys.exit(1)
+
+
+def main():
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        # Workflow logs for this public repository must not contain parcel data.
+        with open(os.devnull, 'w') as sink, redirect_stdout(sink), redirect_stderr(sink):
+            _main()
+        return
+    _main()
 
 
 if __name__ == '__main__':
