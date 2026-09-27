@@ -46,6 +46,17 @@ Open **Actions → Verify Backblaze B2 Storage → Run workflow** after a tracki
 
 The tracking workflow also reports whether its **Upload updated private data to B2** step succeeded. If that step fails, the run is marked as failed; do not assume the new history was saved. You can run the verifier after each successful tracking run to confirm the latest history is present in B2.
 
+## Verified migration run
+
+The parcel tracker was migrated and tested successfully:
+
+- Existing Mega `config.json` and `state.json` were copied into the `parcel-tracker/` B2 prefix.
+- B2 verification confirmed the private objects are readable.
+- A live tracking run downloaded from B2, processed **3 parcels**, uploaded updated state back to B2, and cleaned up its local files.
+- Notifications were enabled for the test run. No notification was sent because no parcel status/history change was detected; future changes will use the configured ntfy topic.
+
+The bill-checker objects remain at the B2 bucket root and are not affected by the parcel-tracker namespace.
+
 ## Understanding ntfy results
 
 - A log message saying **Notification sent** means the ntfy server accepted the message.
