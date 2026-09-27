@@ -61,9 +61,11 @@ export function parseStateJson(input: Buffer | string): TrackingState {
   } catch {
     throw new SyncFailure('state.json is not valid JSON.');
   }
-  if (!isRecord(value) || Object.values(value).some((entry) => !isRecord(entry))) {
-    throw new SyncFailure('state.json must be a JSON object of tracking-state entries.');
+  if (!isRecord(value)) {
+    throw new SyncFailure('state.json must be a JSON object.');
   }
+  // Preserve legacy scalar/array metadata entries untouched. Tracker code only
+  // reads known parcel keys and replaces those entries after a successful scan.
   return value as TrackingState;
 }
 
