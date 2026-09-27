@@ -1,10 +1,14 @@
-# Sensitive local config with tracking numbers & private ntfy topic - never commit to public repo
-config.json
+# Private runtime data: never commit parcel IDs, state, or notification topics
+/config.json
+/state.json
+/config.json.*.tmp
+/state.json.*.tmp
 
-# Tracking state (statuses/locations) - persisted via GitHub Actions cache
-state.json
-
-# Node & Build artifacts
-node_modules/
-dist/
+# Local secrets and environment overrides; keep the tracked template only
 .env
+.env.*
+!.env.example
+
+# Node and build artifacts
+/node_modules/
+/dist/

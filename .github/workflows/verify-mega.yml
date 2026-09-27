@@ -1,24 +1,22 @@
-name: Verify Mega Storage
-
+name: Verify MEGA Storage
 on:
   workflow_dispatch:
-
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
+          node-version: '22'
+          cache: 'npm'
       - name: Install dependencies
-        run: npm install
-
-      - name: Verify Mega Files
+        run: npm ci
+      - name: Verify private MEGA files
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}

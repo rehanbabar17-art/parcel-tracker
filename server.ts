@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
@@ -16,27 +16,22 @@ import {
 } from './src/server/engine.ts';
 import { trackParcel } from './src/server/trackers/index.ts';
 import type { CourierName, ParcelConfig } from './src/server/trackers/types.ts';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isProd = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 3000;
-
+// The API serves private parcel data and has no login; default to loopback.
+const HOST = process.env.HOST || '127.0.0.1';
 async function startServer() {
   const app = express();
-
-  app.use(cors());
   app.use(express.json());
-
   // API Routes
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
-
   app.get('/api/config', (req, res) => {
     res.json(getConfig());
   });
-
   app.post('/api/config', (req, res) => {
     const updated = req.body;
     if (!updated || !Array.isArray(updated.trackers) || !updated.ntfy) {
@@ -45,14 +40,11 @@ async function startServer() {
     const saved = saveConfig(updated);
     res.json(saved);
   });
-
   app.get('/api/parcels', (req, res) => {
     const config = getConfig();
     const state = getState();
-
     // Run 48h check on read as well
     removeDeliveredParcels(config, state);
-
     const parcelsWithState = config.trackers
       .filter((p) => !state[`${p.courier}:${p.tracking_number}`]?.removed)
       .map((p) => {
@@ -63,38 +55,31 @@ async function startServer() {
           state: entry
         };
       });
-
     res.json({
       parcels: parcelsWithState,
       summary: buildSummary(config, state),
       lastUpdated: new Date().toISOString()
     });
   });
-
   app.post('/api/parcels', (req, res) => {
     const { name, courier, tracking_number } = req.body;
     if (!name || !courier || !tracking_number) {
       return res.status(400).json({ error: 'name, courier, and tracking_number are required' });
     }
-
     const config = getConfig();
     const exists = config.trackers.find(
       (p) => p.courier === courier.toLowerCase() && p.tracking_number === tracking_number.trim()
     );
-
     if (exists) {
       return res.status(409).json({ error: 'Parcel already in tracking list' });
     }
-
     const newParcel: ParcelConfig = {
       name: name.trim(),
       courier: courier.toLowerCase() as CourierName,
       tracking_number: tracking_number.trim()
     };
-
     config.trackers.push(newParcel);
     saveConfig(config);
-
     // Initial track & notify in background
     (async () => {
       try {
@@ -111,13 +96,11 @@ async function startServer() {
         saveState(state);
         await notifyParcel(newParcel.name, newParcel.courier, newParcel.tracking_number, res.status, res.location, res.history);
       } catch (e) {
-        console.warn('Initial tracking/notification error:', e);
+        console.warn('Initial tracking/notification error.');
       }
     })();
-
     res.json({ success: true, parcel: newParcel });
   });
-
   app.post('/api/parcels/:courier/:trackingNumber/notify', async (req, res) => {
     const { courier, trackingNumber } = req.params;
     const config = getConfig();
@@ -127,7 +110,6 @@ async function startServer() {
     if (!parcel) {
       return res.status(404).json({ error: 'Parcel not found' });
     }
-
     try {
       const result = await trackParcel(courier as CourierName, trackingNumber);
       const state = getState();
@@ -140,7 +122,6 @@ async function startServer() {
         customer: result.customer
       };
       saveState(state);
-
       const notifyRes = await notifyParcel(
         parcel.name,
         parcel.courier,
@@ -150,45 +131,36 @@ async function startServer() {
         result.history
       );
       res.json({ success: notifyRes.success, error: notifyRes.error, result });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Notification failed' });
+    } catch {
+      res.status(500).json({ error: 'Notification failed' });
     }
   });
-
   app.delete('/api/parcels/:courier/:trackingNumber', (req, res) => {
     const { courier, trackingNumber } = req.params;
     const config = getConfig();
     const initialLen = config.trackers.length;
-
     config.trackers = config.trackers.filter(
       (p) => !(p.courier.toLowerCase() === courier.toLowerCase() && p.tracking_number === trackingNumber)
     );
-
     if (config.trackers.length === initialLen) {
       return res.status(404).json({ error: 'Parcel not found in config' });
     }
-
     saveConfig(config);
-
-    // Also remove from state
     const state = getState();
     const key = `${courier.toLowerCase()}:${trackingNumber}`;
     delete state[key];
     saveState(state);
-
     res.json({ success: true });
   });
-
   app.post('/api/track-all', async (req, res) => {
     try {
       const sendNotifications = req.body?.sendNotifications !== false;
       const result = await trackAllParcels({ sendNotifications });
       res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Failed to track parcels' });
+    } catch {
+      res.status(500).json({ error: 'Failed to track parcels' });
     }
   });
-
   app.post('/api/track-one', async (req, res) => {
     const { courier, tracking_number } = req.body;
     if (!courier || !tracking_number) {
@@ -196,7 +168,6 @@ async function startServer() {
     }
     try {
       const result = await trackParcel(courier as CourierName, tracking_number);
-      // update state
       const state = getState();
       const key = `${courier.toLowerCase()}:${tracking_number}`;
       state[key] = {
@@ -210,30 +181,26 @@ async function startServer() {
         state[key].delivered_at = new Date().toISOString();
       }
       saveState(state);
-
       res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Tracking failed' });
+    } catch {
+      res.status(500).json({ error: 'Tracking failed' });
     }
   });
-
   app.post('/api/ntfy/test', async (req, res) => {
     const config = getConfig();
     const { message, title, priority } = req.body || {};
     const notifyRes = await sendNtfy(
       config,
       title || 'Test Notification from Parcel Tracker',
-      message || 'Parcel Tracker ntfy integration is working properly! 📦',
+      message || 'Parcel Tracker ntfy integration is working properly!',
       priority || 'default',
       ['white_check_mark', 'package']
     );
     res.json(notifyRes);
   });
-
   app.get('/api/state', (req, res) => {
     res.json(getState());
   });
-
   // Frontend integration
   if (!isProd) {
     const vite = await createViteServer({
@@ -247,20 +214,14 @@ async function startServer() {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
-
   // Periodic background check every 30 minutes
   setInterval(() => {
-    trackAllParcels({ sendNotifications: true }).catch((err) => {
-      console.warn('[Auto-Track] Error in periodic check:', err);
+    trackAllParcels({ sendNotifications: true }).catch(() => {
+      console.warn('[Auto-Track] Periodic check failed.');
     });
   }, 30 * 60 * 1000);
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`📦 Parcel Tracker server running at http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Parcel Tracker server running at http://${HOST}:${PORT}`);
   });
 }
-
-startServer().catch((err) => {
-  console.error('Failed to start Parcel Tracker server:', err);
-  process.exit(1);
-});
+startServer();

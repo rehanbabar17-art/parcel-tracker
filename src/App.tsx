@@ -396,7 +396,7 @@ export default function App() {
               <div className="font-semibold text-white flex items-center gap-2">
                 <span>Active ntfy Topic:</span>
                 <code className="px-2 py-0.5 rounded bg-slate-950 text-indigo-300 font-mono text-[11px] border border-indigo-500/20">
-                  {config?.ntfy?.topic || '[removed-public-notification-topic]'}
+                  {config?.ntfy?.topic || 'Not configured'}
                 </code>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -406,12 +406,12 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <a
-              href={`${config?.ntfy?.server || 'https://ntfy.sh'}/${config?.ntfy?.topic || '[removed-public-notification-topic]'}`}
+              href={config?.ntfy?.topic ? `${config?.ntfy?.server || 'https://ntfy.sh'}/${config.ntfy.topic}` : undefined}
               target="_blank"
               rel="noreferrer"
               className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] inline-flex items-center gap-1.5 transition shadow shadow-indigo-600/20"
             >
-              <span>View Alerts Channel</span>
+              <span>{config?.ntfy?.topic ? 'View Alerts Channel' : 'Configure Alerts'}</span>
               <ExternalLink className="w-3 h-3" />
             </a>
             <button
