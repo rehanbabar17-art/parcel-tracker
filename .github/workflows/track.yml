@@ -34,7 +34,7 @@ jobs:
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-          TRACKER_SILENT: '0'
+          TRACKER_SILENT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: npm run track
       - name: Upload updated private data to MEGA
         if: ${{ always() && steps.mega_download.outcome == 'success' }}

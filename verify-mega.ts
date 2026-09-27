@@ -35,9 +35,8 @@ async function verify(): Promise<void> {
 
     const configFile = newestFile(trackerFolder, 'config.json');
     const stateFile = newestFile(trackerFolder, 'state.json');
-    if (!configFile || !stateFile) {
-      throw new Error('config.json or state.json is missing from the private MEGA folder.');
-    }
+    if (!configFile) throw new Error('config.json is missing from the private MEGA folder.');
+    if (!stateFile) throw new Error('state.json is missing from the private MEGA folder.');
 
     const configData = await configFile.downloadBuffer({});
     const stateData = await stateFile.downloadBuffer({});
@@ -57,7 +56,8 @@ function safeFailureCategory(error: unknown): string {
   if (message.includes('EBLOCKED')) return 'MEGA reports that the account is blocked.';
   if (/EACCESS|EKEY|EPASSWORD|credentials/i.test(message)) return 'MEGA rejected the login credentials.';
   if (message.includes('tracker folder is missing')) return 'The private tracker folder is missing.';
-  if (message.includes('config.json or state.json is missing')) return 'config.json or state.json is missing.';
+  if (message.includes('config.json is missing')) return 'config.json is missing.';
+  if (message.includes('state.json is missing')) return 'state.json is missing.';
   if (/not valid JSON|invalid tracker entry|invalid notification settings|must contain|must be a JSON object/.test(message)) {
     return 'A private MEGA file has invalid JSON or structure.';
   }
