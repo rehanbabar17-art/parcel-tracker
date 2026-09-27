@@ -65,4 +65,4 @@ The project supports these courier names: `tcs`, `leopards`, `postex`, `daraz`, 
 
 - Never commit `config.json`, `state.json`, `.env`, real tracking IDs, or the ntfy topic.
 - Do not put parcel details in GitHub workflow inputs, issues, pull requests, or comments.
-- The old `TRACKER_CONFIG` GitHub secret was used only to migrate settings when MEGA had no `config.json`. Once you confirm the MEGA copy is valid, remove that old secret in repository settings. Future runs read the configuration from MEGA.
+- The legacy `TRACKER_CONFIG` GitHub secret was used only for a one-time migration. The tracking workflow no longer uses it; it reads `config.json` from MEGA. After confirming the MEGA copy is valid, remove the obsolete secret in repository Actions settings.
