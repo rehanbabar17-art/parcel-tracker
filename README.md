@@ -24,7 +24,7 @@ The scheduled job fails closed if it cannot authenticate, find a valid `config.j
 2. Run **Actions → Initialize Missing MEGA Files → Run workflow** if the `github-data/parcel-tracker/` folder or its initial files do not exist. This operation creates a placeholder config and empty state **only when the corresponding file is absent**; it preserves existing files.
 3. In MEGA, privately edit `github-data/parcel-tracker/config.json` to add the real parcel entries and notification settings. Do not put tracking IDs in workflow-dispatch inputs, commits, issues, or public comments. `config.example.json` contains placeholders only.
 4. Run **Actions → Verify MEGA Storage → Run workflow**. It validates both JSON files and reports only aggregate counts and sizes.
-5. Run **Actions → Track Parcels → Run workflow**, or leave the hourly schedule enabled. The workflow downloads the MEGA data, tracks the configured parcels, uploads updated configuration/state to MEGA, and removes the local files from its ephemeral runner.
+5. Run **Actions → Track Parcels → Run workflow**, or leave the hourly schedule enabled. A manually started run suppresses ntfy notifications; scheduled and repository-dispatch runs retain normal notification behavior. The workflow downloads the MEGA data, tracks the configured parcels, uploads updated configuration/state to MEGA, and removes the local files from its ephemeral runner.
 
 Example `config.json` shape (use real values only in the private MEGA copy):
 
