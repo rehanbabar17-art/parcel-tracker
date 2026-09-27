@@ -10,11 +10,17 @@
     "mega:upload": "tsx src/server/mega-sync.ts upload",
     "mega:initialize": "tsx src/server/mega-sync.ts initialize",
     "mega:clear-history": "tsx src/server/mega-sync.ts clear-history",
+    "b2:download": "tsx src/server/b2-sync.ts download",
+    "b2:upload": "tsx src/server/b2-sync.ts upload",
+    "b2:migrate-from-mega": "tsx src/server/b2-sync.ts migrate-from-mega",
+    "b2:verify": "tsx src/server/b2-sync.ts verify",
+    "b2:clear-history": "tsx src/server/b2-sync.ts clear-history",
     "track": "tsx -e \"import { trackAllParcels } from './src/server/engine.ts'; trackAllParcels().then(() => process.exit(0));\"",
     "manage": "tsx src/server/manage.ts",
     "start": "node server.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
