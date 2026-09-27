@@ -1,68 +1,68 @@
-# Parcel Tracker with Private MEGA Storage
+# Parcel Tracker: simple setup guide
 
-A Node.js parcel tracker that treats MEGA as the source of truth for private parcel configuration (`config.json`) and tracking state (`state.json`). GitHub Actions runs the hourly job, but parcel identifiers and state are restored from MEGA at runtime and are never intended to be committed to this public repository.
+## What this app does
 
-## Data flow
+Parcel Tracker checks the delivery progress of the parcels you list. It can send updates to a private channel in the **ntfy** app. It runs automatically once an hour through GitHub Actions, or you can start a run yourself.
+
+## Where your information is kept
+
+Your private MEGA folder is the storage cabinet for the tracker:
+
+- **`config.json`** says which parcels to follow and contains the ntfy notification settings.
+- **`state.json`** remembers the last check and the delivery checkpoints found so far. This helps the app tell what is new and what changed.
+
+GitHub Actions temporarily downloads these files, checks the parcels, uploads the updated files back to MEGA, and removes its temporary copies when the run ends. Parcel IDs and delivery details are not supposed to be placed in GitHub files, comments, or workflow inputs.
 
 ```text
-MEGA: github-data/parcel-tracker/
-├── config.json  # parcel names, couriers, tracking IDs, ntfy settings
-└── state.json   # last status, location, event history
-       │
-       ▼
-GitHub Actions runner (ephemeral workspace)
-  download → validate → track → update state → upload → delete local files
+MEGA files → GitHub runs the tracker → updated history goes back to MEGA
 ```
 
-The scheduled job fails closed if it cannot authenticate, find a valid `config.json`, or parse the data. A missing `state.json` is initialized to `{}`. Upload only runs after the download step succeeds, and a failed upload makes the Actions run fail rather than reporting a false success. Sync messages do not print parcel identifiers, names, locations, notification topics, or file contents.
+## Before using it
 
-## Setup
+1. In your repository, open **Settings → Secrets and variables → Actions**. Add the MEGA account email as `MEGA_EMAIL` and its password as `MEGA_PASSWORD`. These are private GitHub secrets; do not type them into a workflow file.
+2. In MEGA, open `github-data/parcel-tracker/config.json`. Put your real parcel names, courier names, and tracking IDs there. Set the ntfy server and topic in the same file. Keep this file private.
+3. Install/open the ntfy app on your phone and subscribe to the topic configured in `config.json`. The app cannot confirm whether your phone displayed an alert; a successful tracker run can confirm only that ntfy accepted the message.
 
-1. In the repository, open **Settings → Secrets and variables → Actions** and create:
-   - `MEGA_EMAIL`: the email address for the MEGA account.
-   - `MEGA_PASSWORD`: the MEGA account password.
-2. Run **Actions → Initialize Missing MEGA Files → Run workflow** if the `github-data/parcel-tracker/` folder or its initial files do not exist. This operation creates a placeholder config and empty state **only when the corresponding file is absent**; it preserves existing files.
-3. In MEGA, privately edit `github-data/parcel-tracker/config.json` to add the real parcel entries and notification settings. Do not put tracking IDs in workflow-dispatch inputs, commits, issues, or public comments. `config.example.json` contains placeholders only.
-4. Run **Actions → Verify MEGA Storage → Run workflow**. It validates both JSON files and reports only aggregate counts and sizes.
-5. Run **Actions → Track Parcels → Run workflow**, or leave the hourly schedule enabled. A manually started run suppresses ntfy notifications; scheduled and repository-dispatch runs retain normal notification behavior. The workflow downloads the MEGA data, tracks the configured parcels, uploads updated configuration/state to MEGA, and removes the local files from its ephemeral runner.
+If MEGA does not yet have `config.json` or `state.json`, use **Actions → Initialize Missing MEGA Files → Run workflow**. It creates only missing files and will not replace files that already exist. The example file contains placeholders, not real parcel information.
 
-Example `config.json` shape (use real values only in the private MEGA copy):
+## Start a tracking run
 
-```json
-{
-  "trackers": [
-    {
-      "name": "Example Parcel",
-      "courier": "tcs",
-      "tracking_number": "YOUR_TRACKING_NUMBER"
-    }
-  ],
-  "ntfy": {
-    "server": "https://ntfy.sh",
-    "topic": "YOUR_NTFY_TOPIC",
-    "priority": "default",
-    "tags": ["package", "delivery"]
-  }
-}
+Open **Actions → Track Parcels → Run workflow**. You will see two optional switches:
+
+- **Clear old parcel status/history before this run** — starts with an empty `state.json`, then writes fresh results after checking the parcels. It keeps `config.json` (your parcel list and notification settings). Use this only when you intentionally want to forget the saved parcel history.
+- **Send ntfy notifications during this run** — turn this on when you want the run to send alerts. It is off by default for manual runs. The hourly scheduled run continues to use the normal notification behavior.
+
+For the notification check requested here, turn on **Send ntfy notifications**. If you also clear history, the tracker treats every configured parcel as a first check, so it may send one alert per parcel. That is expected for a reset.
+
+## Check that MEGA was updated
+
+Open **Actions → Verify MEGA Storage → Run workflow** after a tracking run. A successful check confirms the files can be read and shows only totals—such as how many parcel records and history events were saved. It does not print parcel IDs, names, locations, topic names, or file contents.
+
+The tracking workflow also reports whether its **Upload updated private data to MEGA** step succeeded. If that step fails, the run is marked as failed; do not assume the new history was saved. You can run the verifier after each successful tracking run to confirm the latest history is present in MEGA.
+
+## Understanding ntfy results
+
+- A log message saying **Notification sent** means the ntfy server accepted the message.
+- A message saying **Notification failed** or **topic not configured** means the phone will not receive that alert from this run.
+- If ntfy accepted it but nothing appears on your phone, check that the phone is subscribed to the same topic, notifications are allowed for the app, and the correct ntfy server is selected.
+
+The app sends parcel details to the ntfy topic you configured. Treat that topic as private and do not share it publicly.
+
+## Local development
+
+For a developer who wants to run the dashboard on their own computer:
+
+```bash
+npm ci
+npm run dev
 ```
 
-Supported courier names: `tcs`, `leopards`, `postex`, `daraz`, `dex`, and `trax`.
+The dashboard uses `127.0.0.1` by default and has no login screen. Do not expose it to the public internet unless authentication and access controls are added.
 
-### Legacy config migration
+The project supports these courier names: `tcs`, `leopards`, `postex`, `daraz`, `dex`, and `trax`.
 
-For a one-time migration only, the tracking workflow can bootstrap a missing MEGA `config.json` from the encrypted `TRACKER_CONFIG` Actions secret, if that secret exists and contains valid JSON. MEGA always takes precedence when its file exists. After a successful run, verify the MEGA files and remove the obsolete `TRACKER_CONFIG` secret in repository settings; the ongoing tracker needs only `MEGA_EMAIL` and `MEGA_PASSWORD`.
+## Keep private data private
 
-## Local checks and dashboard safety
-
-- `npm ci` installs the locked dependencies.
-- `npm run lint` type-checks the project.
-- `npm run build` builds the browser UI.
-- `npm run dev` starts the dashboard on `127.0.0.1` by default. Its API returns tracking data and does not provide user authentication; do **not** expose it through a public interface or reverse proxy without adding authentication and access controls.
-
-## Public-repository safeguards
-
-- `config.json`, `state.json`, `.env` files, and temporary copies are ignored by Git. Keep real values out of all tracked files.
-- The tracking workflow has no parcel-name, courier, or tracking-number inputs, avoiding private data in public workflow-run metadata.
-- Actions logging is intentionally minimized/redacted. Do not add debug output that prints downloaded files, API responses containing parcel details, notification topics, or tracking identifiers.
-- `MEGA_EMAIL` and `MEGA_PASSWORD` are required encrypted Actions secrets; never put their values in workflow YAML.
-- The repository currently contains no committed `config.json` or `state.json`. Do not assume the dashboard is protected if you deploy it; it is local-only by default and currently has no login system.
+- Never commit `config.json`, `state.json`, `.env`, real tracking IDs, or the ntfy topic.
+- Do not put parcel details in GitHub workflow inputs, issues, pull requests, or comments.
+- The old `TRACKER_CONFIG` GitHub secret was used only to migrate settings when MEGA had no `config.json`. Once you confirm the MEGA copy is valid, remove that old secret in repository settings. Future runs read the configuration from MEGA.

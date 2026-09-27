@@ -245,6 +245,22 @@ export async function initializeMega(): Promise<boolean> {
   }
 }
 
+export function clearLocalHistory(): boolean {
+  try {
+    if (!fs.existsSync(CONFIG_FILE) || !fs.existsSync(STATE_FILE)) {
+      throw new SyncFailure('Downloaded config.json and state.json are required before clearing parcel history.');
+    }
+    parseConfigJson(fs.readFileSync(CONFIG_FILE));
+    parseStateJson(fs.readFileSync(STATE_FILE));
+    writePrivateFile(STATE_FILE, '{}\n');
+    console.log('[MEGA] Cleared local parcel history; the workflow will upload fresh state only after tracking succeeds.');
+    return true;
+  } catch (error) {
+    safeFailure('History reset', error);
+    return false;
+  }
+}
+
 const command = process.argv[2];
 const commandTask = command === 'download'
   ? syncFromMega()
@@ -252,7 +268,9 @@ const commandTask = command === 'download'
     ? syncToMega()
     : command === 'initialize'
       ? initializeMega()
-      : undefined;
+      : command === 'clear-history'
+        ? Promise.resolve(clearLocalHistory())
+        : undefined;
 
 if (commandTask) {
   commandTask.then((ok) => {
