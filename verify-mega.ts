@@ -52,7 +52,20 @@ async function verify(): Promise<void> {
   }
 }
 
-verify().catch(() => {
-  console.error('[MEGA-VERIFY] Verification failed. Check account access, folder contents, and file validity.');
+function safeFailureCategory(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (message.includes('EBLOCKED')) return 'MEGA reports that the account is blocked.';
+  if (/EACCESS|EKEY|EPASSWORD|credentials/i.test(message)) return 'MEGA rejected the login credentials.';
+  if (message.includes('tracker folder is missing')) return 'The private tracker folder is missing.';
+  if (message.includes('config.json or state.json is missing')) return 'config.json or state.json is missing.';
+  if (/not valid JSON|invalid tracker entry|invalid notification settings|must contain|must be a JSON object/.test(message)) {
+    return 'A private MEGA file has invalid JSON or structure.';
+  }
+  if (/timed out|ECONN|ENET|fetch failed/i.test(message)) return 'The MEGA service or network request failed.';
+  return 'MEGA login, storage access, or file reading failed; details are suppressed.';
+}
+
+verify().catch((error: unknown) => {
+  console.error(`[MEGA-VERIFY] ${safeFailureCategory(error)}`);
   process.exitCode = 1;
 });
