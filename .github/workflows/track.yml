@@ -39,7 +39,6 @@ jobs:
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-          TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
         run: npm run mega:download
       - name: Clear old parcel history before tracking
         id: clear_history
