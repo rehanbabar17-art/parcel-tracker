@@ -225,8 +225,8 @@ async function migrateFromMega(): Promise<boolean> {
 async function verifyB2(): Promise<boolean> {
   try {
     const { bucket, client } = b2Client();
-    const config = await getObject(client, bucket, 'config.json');
-    const state = await getObject(client, bucket, 'state.json');
+    const config = await getObject(client, bucket, CONFIG_KEY);
+    const state = await getObject(client, bucket, STATE_KEY);
     const parsedConfig = parseConfigJson(config!);
     const parsedState = parseStateJson(state!);
     console.log(`[B2-VERIFY] Authentication succeeded; ${parsedConfig.trackers.length} parcel trackers and ${Object.keys(parsedState).length} saved state records are present.`);
