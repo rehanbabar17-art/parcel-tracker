@@ -3,6 +3,17 @@ on:
   schedule:
     - cron: '0 * * * *'  # Every hour
   workflow_dispatch:
+    inputs:
+      clear_history:
+        description: 'Clear old parcel status/history before this run'
+        required: false
+        type: boolean
+        default: false
+      send_notifications:
+        description: 'Send ntfy notifications during this run'
+        required: false
+        type: boolean
+        default: false
   repository_dispatch:
     types: [hourly-track]
 permissions:
@@ -30,14 +41,19 @@ jobs:
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
           TRACKER_CONFIG: ${{ secrets.TRACKER_CONFIG }}
         run: npm run mega:download
+      - name: Clear old parcel history before tracking
+        id: clear_history
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.clear_history }}
+        run: npm run mega:clear-history
       - name: Track parcels
+        id: track
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-          TRACKER_SILENT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          TRACKER_SILENT: ${{ github.event_name == 'workflow_dispatch' && !inputs.send_notifications && '1' || '0' }}
         run: npm run track
       - name: Upload updated private data to MEGA
-        if: ${{ always() && steps.mega_download.outcome == 'success' }}
+        if: ${{ always() && steps.mega_download.outcome == 'success' && steps.track.outcome == 'success' && (steps.clear_history.outcome == 'success' || steps.clear_history.outcome == 'skipped') }}
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}

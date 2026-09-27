@@ -36,6 +36,20 @@ function safeStateShape(data: Buffer): string {
   return `object with ${values.length} entries (${objectCount} objects, ${arrayCount} arrays, ${otherCount} scalar values)`;
 }
 
+function countHistory(state: ReturnType<typeof parseStateJson>): { records: number; events: number } {
+  let records = 0;
+  let events = 0;
+  for (const entry of Object.values(state)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const history = (entry as Record<string, unknown>).history;
+    if (Array.isArray(history)) {
+      records++;
+      events += history.length;
+    }
+  }
+  return { records, events };
+}
+
 async function verify(): Promise<void> {
   if (!EMAIL || !PASSWORD) {
     throw new Error('Required MEGA Actions secrets are missing.');
@@ -57,6 +71,8 @@ async function verify(): Promise<void> {
     let stateData: Buffer | undefined;
     let trackerCount = 0;
     let stateCount = 0;
+    let historyRecords = 0;
+    let historyEvents = 0;
 
     if (!configFile) {
       problems.push('config.json is missing');
@@ -74,7 +90,11 @@ async function verify(): Promise<void> {
     } else {
       stateData = await stateFile.downloadBuffer({});
       try {
-        stateCount = Object.keys(parseStateJson(stateData)).length;
+        const state = parseStateJson(stateData);
+        stateCount = Object.keys(state).length;
+        const history = countHistory(state);
+        historyRecords = history.records;
+        historyEvents = history.events;
       } catch {
         problems.push(`state.json has unsupported shape: ${safeStateShape(stateData)}`);
       }
@@ -85,6 +105,7 @@ async function verify(): Promise<void> {
     console.log('[MEGA-VERIFY] Authentication succeeded; private files are present and valid.');
     console.log(`[MEGA-VERIFY] config.json: valid (${configData!.length} bytes; ${trackerCount} tracker entries).`);
     console.log(`[MEGA-VERIFY] state.json: valid (${stateData!.length} bytes; ${stateCount} state entries).`);
+    console.log(`[MEGA-VERIFY] saved parcel history: ${historyEvents} events across ${historyRecords} state entries.`);
   } finally {
     await storage.close().catch(() => undefined);
   }

@@ -9,6 +9,7 @@
     "mega:download": "tsx src/server/mega-sync.ts download",
     "mega:upload": "tsx src/server/mega-sync.ts upload",
     "mega:initialize": "tsx src/server/mega-sync.ts initialize",
+    "mega:clear-history": "tsx src/server/mega-sync.ts clear-history",
     "track": "tsx -e \"import { trackAllParcels } from './src/server/engine.ts'; trackAllParcels().then(() => process.exit(0));\"",
     "manage": "tsx src/server/manage.ts",
     "start": "node server.ts"
