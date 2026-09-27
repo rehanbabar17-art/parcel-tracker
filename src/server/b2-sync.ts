@@ -11,6 +11,9 @@ type Node = NonNullable<Folder['children']>[number];
 const ROOT_DIR = process.cwd();
 const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
 const STATE_FILE = path.join(ROOT_DIR, 'state.json');
+const B2_PREFIX = 'parcel-tracker/';
+const CONFIG_KEY = `${B2_PREFIX}config.json`;
+const STATE_KEY = `${B2_PREFIX}state.json`;
 const BUCKET = process.env.B2_BUCKET;
 const ENDPOINT = (process.env.B2_ENDPOINT || 'https://s3.us-east-005.backblazeb2.com').replace(/\/$/, '');
 const TIMEOUT_MS = 20_000;
@@ -160,8 +163,8 @@ async function openMega(): Promise<{ storage: Storage; folder: Folder }> {
 async function downloadB2(): Promise<boolean> {
   try {
     const { bucket, client } = b2Client();
-    const config = await getObject(client, bucket, 'config.json');
-    const state = await getObject(client, bucket, 'state.json');
+    const config = await getObject(client, bucket, CONFIG_KEY);
+    const state = await getObject(client, bucket, STATE_KEY);
     parseConfigJson(config!);
     parseStateJson(state!);
     writePrivate(CONFIG_FILE, config!);
@@ -182,9 +185,9 @@ async function uploadB2(): Promise<boolean> {
     parseConfigJson(config);
     parseStateJson(state);
     const { bucket, client } = b2Client();
-    await putObject(client, bucket, 'config.json', config);
-    await putObject(client, bucket, 'state.json', state);
-    console.log('[B2] Uploaded validated config.json and state.json.');
+    await putObject(client, bucket, CONFIG_KEY, config);
+    await putObject(client, bucket, STATE_KEY, state);
+    console.log('[B2] Uploaded validated parcel config.json and state.json.');
     return true;
   } catch (error) {
     console.error(`[B2] Upload failed: ${error instanceof SyncFailure ? error.message : 'B2 authentication, storage, or network error.'}`);
@@ -206,8 +209,8 @@ async function migrateFromMega(): Promise<boolean> {
     parseConfigJson(config);
     parseStateJson(state);
     const { bucket, client } = b2Client();
-    await putObject(client, bucket, 'config.json', config);
-    await putObject(client, bucket, 'state.json', state);
+    await putObject(client, bucket, CONFIG_KEY, config);
+    await putObject(client, bucket, STATE_KEY, state);
     await verifyB2();
     console.log('[B2] Parcel config and history migration completed.');
     return true;

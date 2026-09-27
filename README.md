@@ -8,6 +8,11 @@ Parcel Tracker checks the delivery progress of the parcels you list. It can send
 
 Your private Backblaze B2 bucket is now the active storage cabinet for the tracker. Mega remains configured as a rollback source during the migration period:
 
+Because the bucket is shared with bill-checker, parcel-tracker uses the private object prefix `parcel-tracker/`:
+
+- `parcel-tracker/config.json`
+- `parcel-tracker/state.json`
+
 - **`config.json`** says which parcels to follow and contains the ntfy notification settings.
 - **`state.json`** remembers the last check and the delivery checkpoints found so far. This helps the app tell what is new and what changed.
 
