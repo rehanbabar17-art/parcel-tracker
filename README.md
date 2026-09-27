@@ -57,6 +57,8 @@ The parcel tracker was migrated and tested successfully:
 
 Bill-checker uses its separate `bill-checker/` B2 folder and is not affected by the parcel-tracker namespace.
 
+Each tracking run writes to the same `parcel-tracker/config.json` and `parcel-tracker/state.json` object keys. Backblaze may show earlier uploads as file versions for recovery, but they are not separate application files; the workflow always reads the current/latest version.
+
 ## Understanding ntfy results
 
 - A log message saying **Notification sent** means the ntfy server accepted the message.
