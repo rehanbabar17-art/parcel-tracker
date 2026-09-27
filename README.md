@@ -6,7 +6,7 @@ Parcel Tracker checks the delivery progress of the parcels you list. It can send
 
 ## Where your information is kept
 
-Your private Backblaze B2 bucket is now the active storage cabinet for the tracker. Mega remains configured as a rollback source during the migration period:
+Your private Backblaze B2 bucket is the active storage cabinet for the tracker:
 
 Because the bucket is shared with bill-checker, parcel-tracker uses the private object prefix `parcel-tracker/`:
 
@@ -25,11 +25,10 @@ B2 files → GitHub runs the tracker → updated history goes back to B2
 ## Before using it
 
 1. In your repository, open **Settings → Secrets and variables → Actions** and add `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET`, and `B2_ENDPOINT` as encrypted secrets. The bucket is `GithubRepoSecretRB17` and the endpoint is `https://s3.us-east-005.backblazeb2.com`.
-2. Run **Actions → Migrate Parcel Data from Mega to Backblaze B2** once. It copies the existing private `config.json` and `state.json` from Mega into B2.
 3. Put your real parcel names, courier names, and tracking IDs in the private B2 `config.json`. Set the ntfy server and topic in the same file. Keep this file private.
 4. Install/open the ntfy app on your phone and subscribe to the topic configured in `config.json`. The app cannot confirm whether your phone displayed an alert; a successful tracker run can confirm only that ntfy accepted the message.
 
-Keep the Mega secrets and files until B2 has passed migration, verification, and a successful tracking run. The old **Initialize Missing MEGA Files** workflow remains available only for rollback.
+B2 migration and verification have been completed. The tracker now uses only the namespaced B2 objects.
 
 ## Start a tracking run
 
@@ -50,7 +49,7 @@ The tracking workflow also reports whether its **Upload updated private data to 
 
 The parcel tracker was migrated and tested successfully:
 
-- Existing Mega `config.json` and `state.json` were copied into the `parcel-tracker/` B2 prefix.
+- Existing private `config.json` and `state.json` are stored in the `parcel-tracker/` B2 prefix.
 - B2 verification confirmed the private objects are readable.
 - A live tracking run downloaded from B2, processed **3 parcels**, uploaded updated state back to B2, and cleaned up its local files.
 - The B2 history was cleared before the test, so all 3 parcels were treated as first-time checks. Notifications were enabled and ntfy accepted **3 notifications**, one for each parcel.
@@ -84,4 +83,4 @@ The project supports these courier names: `tcs`, `leopards`, `postex`, `daraz`, 
 
 - Never commit `config.json`, `state.json`, `.env`, real tracking IDs, or the ntfy topic.
 - Do not put parcel details in GitHub workflow inputs, issues, pull requests, or comments.
-- The tracking workflow reads `config.json` and `state.json` from B2. Keep `MEGA_EMAIL` and `MEGA_PASSWORD` temporarily for rollback and migration, but never put either credential in a repository file.
+- The tracking workflow reads `config.json` and `state.json` from B2.
