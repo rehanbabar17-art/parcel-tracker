@@ -55,7 +55,7 @@ The parcel tracker was migrated and tested successfully:
 - A live tracking run downloaded from B2, processed **3 parcels**, uploaded updated state back to B2, and cleaned up its local files.
 - The B2 history was cleared before the test, so all 3 parcels were treated as first-time checks. Notifications were enabled and ntfy accepted **3 notifications**, one for each parcel.
 
-The bill-checker objects remain at the B2 bucket root and are not affected by the parcel-tracker namespace.
+Bill-checker uses its separate `bill-checker/` B2 folder and is not affected by the parcel-tracker namespace.
 
 ## Understanding ntfy results
 
