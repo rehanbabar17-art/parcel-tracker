@@ -19,6 +19,23 @@ function newestFile(folder: MegaFolder, name: string): MegaNode | undefined {
   }, undefined);
 }
 
+function safeStateShape(data: Buffer): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(data.toString('utf8'));
+  } catch {
+    return 'invalid JSON';
+  }
+  if (Array.isArray(value)) return `array with ${value.length} entries`;
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return `top-level ${typeof value}`;
+  const values = Object.values(value as Record<string, unknown>);
+  const objectCount = values.filter((entry) => typeof entry === 'object' && entry !== null && !Array.isArray(entry)).length;
+  const arrayCount = values.filter(Array.isArray).length;
+  const otherCount = values.length - objectCount - arrayCount;
+  return `object with ${values.length} entries (${objectCount} objects, ${arrayCount} arrays, ${otherCount} scalar values)`;
+}
+
 async function verify(): Promise<void> {
   if (!EMAIL || !PASSWORD) {
     throw new Error('Required MEGA Actions secrets are missing.');
@@ -35,17 +52,39 @@ async function verify(): Promise<void> {
 
     const configFile = newestFile(trackerFolder, 'config.json');
     const stateFile = newestFile(trackerFolder, 'state.json');
-    if (!configFile) throw new Error('config.json is missing from the private MEGA folder.');
-    if (!stateFile) throw new Error('state.json is missing from the private MEGA folder.');
+    const problems: string[] = [];
+    let configData: Buffer | undefined;
+    let stateData: Buffer | undefined;
+    let trackerCount = 0;
+    let stateCount = 0;
 
-    const configData = await configFile.downloadBuffer({});
-    const stateData = await stateFile.downloadBuffer({});
-    const config = parseConfigJson(configData);
-    const state = parseStateJson(stateData);
+    if (!configFile) {
+      problems.push('config.json is missing');
+    } else {
+      configData = await configFile.downloadBuffer({});
+      try {
+        trackerCount = parseConfigJson(configData).trackers.length;
+      } catch {
+        problems.push('config.json has invalid JSON or structure');
+      }
+    }
+
+    if (!stateFile) {
+      problems.push('state.json is missing');
+    } else {
+      stateData = await stateFile.downloadBuffer({});
+      try {
+        stateCount = Object.keys(parseStateJson(stateData)).length;
+      } catch {
+        problems.push(`state.json has unsupported shape: ${safeStateShape(stateData)}`);
+      }
+    }
+
+    if (problems.length > 0) throw new Error(`VERIFY:${problems.join('; ')}`);
 
     console.log('[MEGA-VERIFY] Authentication succeeded; private files are present and valid.');
-    console.log(`[MEGA-VERIFY] config.json: valid (${configData.length} bytes; ${config.trackers.length} tracker entries).`);
-    console.log(`[MEGA-VERIFY] state.json: valid (${stateData.length} bytes; ${Object.keys(state).length} state entries).`);
+    console.log(`[MEGA-VERIFY] config.json: valid (${configData!.length} bytes; ${trackerCount} tracker entries).`);
+    console.log(`[MEGA-VERIFY] state.json: valid (${stateData!.length} bytes; ${stateCount} state entries).`);
   } finally {
     await storage.close().catch(() => undefined);
   }
@@ -53,6 +92,7 @@ async function verify(): Promise<void> {
 
 function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
+  if (message.startsWith('VERIFY:')) return message.slice('VERIFY:'.length);
   if (message.includes('EBLOCKED')) return 'MEGA reports that the account is blocked.';
   if (/EACCESS|EKEY|EPASSWORD|credentials/i.test(message)) return 'MEGA rejected the login credentials.';
   if (message.includes('tracker folder is missing')) return 'The private tracker folder is missing.';
