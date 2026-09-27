@@ -12,18 +12,17 @@ async function verify() {
   const storage = await new Storage({ email: EMAIL, password: PASSWORD }).ready;
   console.log('[MEGA-VERIFY] Connected successfully.');
 
-  await new Storage({ email: EMAIL, password: PASSWORD }).ready;
   await new Promise((resolve, reject) => {
     storage.reload(err => err ? reject(err) : resolve(true));
   });
 
-  const rootFolder = storage.files.find(f => f.directory && f.name === 'github-data');
+  const rootFolder: any = (storage.root.children || []).find((f: any) => f.directory && f.name === 'github-data');
   if (!rootFolder) {
     console.log('[MEGA-VERIFY] Folder "github-data" not found.');
     return;
   }
 
-  const trackerFolder = (rootFolder.children || []).find(f => f.directory && f.name === 'parcel-tracker');
+  const trackerFolder: any = (rootFolder.children || []).find((f: any) => f.directory && f.name === 'parcel-tracker');
   if (!trackerFolder) {
     console.log('[MEGA-VERIFY] Folder "parcel-tracker" not found under "github-data".');
     return;
