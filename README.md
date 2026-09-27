@@ -53,7 +53,7 @@ The parcel tracker was migrated and tested successfully:
 - Existing Mega `config.json` and `state.json` were copied into the `parcel-tracker/` B2 prefix.
 - B2 verification confirmed the private objects are readable.
 - A live tracking run downloaded from B2, processed **3 parcels**, uploaded updated state back to B2, and cleaned up its local files.
-- Notifications were enabled for the test run. No notification was sent because no parcel status/history change was detected; future changes will use the configured ntfy topic.
+- The B2 history was cleared before the test, so all 3 parcels were treated as first-time checks. Notifications were enabled and ntfy accepted **3 notifications**, one for each parcel.
 
 The bill-checker objects remain at the B2 bucket root and are not affected by the parcel-tracker namespace.
 
