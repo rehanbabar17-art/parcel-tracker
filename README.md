@@ -79,6 +79,8 @@ The dashboard uses `127.0.0.1` by default and has no login screen. Do not expose
 
 The project supports these courier names: `tcs`, `leopards`, `postex`, `daraz`, `dex`, and `trax`.
 
+For Leopards parcels, the dashboard provides **17TRACK as the primary manual lookup** using the parcel tracking number. The dashboard’s built-in Leopards status check remains available as a backup. The 17TRACK link opens their tracking page; automated 17TRACK API integration is not configured.
+
 ## Keep private data private
 
 - Never commit `config.json`, `state.json`, `.env`, real tracking IDs, or the ntfy topic.

@@ -642,6 +642,17 @@ export default function App() {
 
                         <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
                           <span>{parcel.tracking_number}</span>
+                          {parcel.courier.toLowerCase() === 'leopards' && (
+                            <a
+                              href={`https://m.17track.net/en/track-details?nums=${encodeURIComponent(parcel.tracking_number)}&source=www&fc=100366`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-sans font-semibold text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 transition"
+                              title="Primary Leopards tracking check on 17TRACK"
+                            >
+                              17TRACK <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
                           <button
                             onClick={() => copyToClipboard(parcel.tracking_number, key)}
                             className="p-1 hover:text-white rounded"
@@ -710,7 +721,7 @@ export default function App() {
                             onClick={() => handleTrackOne(parcel.courier, parcel.tracking_number)}
                             disabled={isTracking}
                             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition disabled:opacity-50"
-                            title="Check status now"
+                            title={parcel.courier.toLowerCase() === 'leopards' ? 'Backup check using the built-in Leopards tracker' : 'Check status now'}
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${isTracking ? 'animate-spin' : ''}`} />
                           </button>
