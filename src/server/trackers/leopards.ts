@@ -1,11 +1,16 @@
 import type { TrackingResult, HistoryItem } from './types.ts';
 
 export async function trackLeopards(trackingNumber: string): Promise<TrackingResult> {
+  const primaryResult = await trackWithLcsTracking(trackingNumber);
+  if (!primaryResult.error) {
+    return primaryResult;
+  }
+
   const baseUrls = [
     "https://pk.leopardscourier.com",
     "https://www.leopardscourier.com"
   ];
-  let lastError = "";
+  let lastError = primaryResult.error;
 
   for (const baseUrl of baseUrls) {
     try {
@@ -27,6 +32,77 @@ export async function trackLeopards(trackingNumber: string): Promise<TrackingRes
     delivered: false,
     error: lastError || `Tracking failed: Could not retrieve info for ${trackingNumber}`
   };
+}
+
+async function trackWithLcsTracking(trackingNumber: string): Promise<TrackingResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(`https://www.lcstracking.pk/api/track/?cn=${encodeURIComponent(trackingNumber)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.lcstracking.pk/"
+      },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`LCSTracking returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json() as {
+      found?: boolean;
+      status?: string;
+      origin?: string;
+      destination?: string;
+      timeline?: Array<{ date?: string; status?: string }>;
+    };
+
+    if (!data.found || !data.status?.trim()) {
+      return {
+        status: "Error",
+        location: "N/A",
+        timestamp: new Date().toISOString(),
+        history: [],
+        delivered: false,
+        error: "LCSTracking.pk did not return a shipment status."
+      };
+    }
+
+    const history: HistoryItem[] = (Array.isArray(data.timeline) ? data.timeline : [])
+      .filter(event => Boolean(event.status?.trim()))
+      .map((event, index) => ({
+        step: index + 1,
+        status: event.status!.trim(),
+        timestamp: event.date?.trim() || ""
+      }));
+
+    const statusLocation = data.status.match(/\b(?:to|at|in)\s+(.+)$/i)?.[1]?.trim();
+    const location = [data.origin, data.destination].some(value => value && value !== "N/A")
+      ? [data.origin, data.destination].filter(value => value && value !== "N/A").join(" -> ")
+      : statusLocation || "N/A";
+
+    return {
+      status: data.status.trim(),
+      location,
+      timestamp: new Date().toISOString(),
+      history,
+      delivered: data.status.toLowerCase().includes("delivered")
+    };
+  } catch {
+    return {
+      status: "Error",
+      location: "N/A",
+      timestamp: new Date().toISOString(),
+      history: [],
+      delivered: false,
+      error: "Could not retrieve status from LCSTracking.pk."
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<TrackingResult> {
