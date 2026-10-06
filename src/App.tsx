@@ -640,18 +640,29 @@ export default function App() {
                           })()}
                         </div>
 
-                        <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono">
                           <span>{parcel.tracking_number}</span>
                           {parcel.courier.toLowerCase() === 'leopards' && (
-                            <a
-                              href={`https://m.17track.net/en/track-details?nums=${encodeURIComponent(parcel.tracking_number)}&source=www&fc=100366`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-sans font-semibold text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 transition"
-                              title="Primary Leopards tracking check on 17TRACK"
-                            >
-                              17TRACK <ExternalLink className="w-3 h-3" />
-                            </a>
+                            <>
+                              <a
+                                href={`https://www.lcstracking.pk/?cn=${encodeURIComponent(parcel.tracking_number)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-sans font-semibold text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 transition"
+                                title="Primary Leopards lookup on LCSTracking.pk"
+                              >
+                                LCS Tracking <ExternalLink className="w-3 h-3" />
+                              </a>
+                              <a
+                                href={`https://m.17track.net/en/track-details?nums=${encodeURIComponent(parcel.tracking_number)}&source=www&fc=100366`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 font-sans text-slate-400 hover:text-slate-200 transition"
+                                title="Alternate lookup on 17TRACK"
+                              >
+                                17TRACK <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </>
                           )}
                           <button
                             onClick={() => copyToClipboard(parcel.tracking_number, key)}
