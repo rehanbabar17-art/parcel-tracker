@@ -5,6 +5,7 @@ export async function trackLeopards(trackingNumber: string): Promise<TrackingRes
     "https://pk.leopardscourier.com",
     "https://www.leopardscourier.com"
   ];
+  let lastError = "";
 
   for (const baseUrl of baseUrls) {
     try {
@@ -12,6 +13,7 @@ export async function trackLeopards(trackingNumber: string): Promise<TrackingRes
       if (!result.error) {
         return result;
       }
+      lastError = result.error;
     } catch {
       // try next base url
     }
@@ -23,7 +25,7 @@ export async function trackLeopards(trackingNumber: string): Promise<TrackingRes
     timestamp: new Date().toISOString(),
     history: [],
     delivered: false,
-    error: `Tracking failed: Could not retrieve info for ${trackingNumber}`
+    error: lastError || `Tracking failed: Could not retrieve info for ${trackingNumber}`
   };
 }
 
@@ -75,18 +77,8 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
     });
     const apiData = await apiResp.json() as any;
 
-    if (!apiData?.success) {
-      return {
-        status: "Error",
-        location: "N/A",
-        timestamp: new Date().toISOString(),
-        history: [],
-        delivered: false,
-        error: "Tracking API returned failure"
-      };
-    }
-
-    // Step 3: View page
+    // Step 3: Read the detail page even if the preliminary API flag is false;
+    // the detail page may still contain a usable status or a specific not-found message.
     const viewResp = await fetch(`${baseUrl}/shipment_tracking_view?cn_number=${encodeURIComponent(trackingNumber)}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -101,9 +93,33 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
 
     const cleanText = viewHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
+    if (/appeared to be invalid\s*\/\s*record not found|record not found/i.test(cleanText)) {
+      return {
+        status: "Error",
+        location: "N/A",
+        timestamp: new Date().toISOString(),
+        history: [],
+        delivered: false,
+        error: "Leopards reports this consignment number is invalid or was not found."
+      };
+    }
+
     const statusMatch = cleanText.match(/Current Status(?:\/Reason)?\s*:\s*([^:]+?)(?:Origin|Destination|Consignee|$)/i);
     if (statusMatch && statusMatch[1]) {
       status = statusMatch[1].trim();
+    }
+
+    if (status === "Unknown") {
+      return {
+        status: "Error",
+        location: "N/A",
+        timestamp: new Date().toISOString(),
+        history: [],
+        delivered: false,
+        error: apiData?.success
+          ? "Could not read a shipment status from Leopards' tracking page."
+          : "Leopards did not return a shipment status. Please verify the consignment number with the carrier."
+      };
     }
 
     const originMatch = cleanText.match(/Origin\s*:\s*([^:]+?)(?:Destination|Status|$)/i);
