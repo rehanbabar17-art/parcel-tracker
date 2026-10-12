@@ -37,6 +37,11 @@ function maskNumber(num: string): string {
   return `${num.slice(0, 4)}****${num.slice(-2)}`;
 }
 
+function isUnknownStatus(status: string | undefined): boolean {
+  const normalized = status?.trim().toLowerCase() || '';
+  return normalized === 'unknown' || normalized === 'unknown error' || normalized === 'unknown status';
+}
+
 let inMemoryConfig: AppConfig = loadConfig();
 let inMemoryState: TrackingState = loadState();
 
@@ -149,7 +154,7 @@ export function buildSummary(config: AppConfig, state: TrackingState): string {
 
     const parcelKey = `${courier}:${tracking_number}`;
     const entry: Partial<StateEntry> = state[parcelKey] || {};
-    if (entry.removed) continue;
+    if (entry.removed || !entry.status?.trim() || isUnknownStatus(entry.status)) continue;
 
     const status = entry.status || 'Unknown';
     const location = entry.location || '';
@@ -308,6 +313,16 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
 
     try {
       const result = await trackParcel(courier, tracking_number);
+      if (isUnknownStatus(result.status)) {
+        // Unknown is an inconclusive lookup, not a parcel status update.
+        // Preserve a prior valid status; remove any legacy Unknown placeholder.
+        if (state[parcelKey] && isUnknownStatus(state[parcelKey].status)) {
+          delete state[parcelKey];
+        }
+        console.log('  [IGNORED] Unknown status response; stored parcel state was not updated.');
+        continue;
+      }
+
       const existingEntry = state[parcelKey];
       const previousStatus = existingEntry?.status || '';
       const previousLocation = existingEntry?.location || '';
