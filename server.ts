@@ -153,27 +153,30 @@ async function startServer() {
     (async () => {
       try {
         const result = await trackParcel(newParcel.courier, newParcel.tracking_number);
-        const state = getState();
-        const key = `${newParcel.courier}:${newParcel.tracking_number}`;
-        const lastEvent = result.history?.[0]?.timestamp || '';
-        state[key] = {
-          ...state[key],
-          status: result.status,
-          last_checked: new Date().toISOString(),
-          location: result.location,
-          last_event_time: lastEvent,
-          history: result.history,
-          customer: result.customer,
-          delivered_at: result.delivered ? (state[key]?.delivered_at || new Date().toISOString()) : state[key]?.delivered_at
-        };
-        saveState(state);
-        const notifyRes = await notifyParcel(newParcel.name, newParcel.courier, newParcel.tracking_number, result.status, result.location, result.history);
-        if (notifyRes.success) {
-          state[key].last_notified_event_time = lastEvent;
+        const normStatus = (result.status || '').trim().toLowerCase();
+        if (!result.error && normStatus !== 'unknown' && normStatus !== 'unknown status' && normStatus !== 'unknown error') {
+          const state = getState();
+          const key = `${newParcel.courier}:${newParcel.tracking_number}`;
+          const lastEvent = result.history?.[0]?.timestamp || '';
+          state[key] = {
+            ...state[key],
+            status: result.status,
+            last_checked: new Date().toISOString(),
+            location: result.location,
+            last_event_time: lastEvent,
+            history: result.history,
+            customer: result.customer,
+            delivered_at: result.delivered ? (state[key]?.delivered_at || new Date().toISOString()) : state[key]?.delivered_at
+          };
           saveState(state);
-        }
-        if (isB2Configured()) {
-          await putB2State(state).catch(() => {});
+          const notifyRes = await notifyParcel(newParcel.name, newParcel.courier, newParcel.tracking_number, result.status, result.location, result.history);
+          if (notifyRes.success) {
+            state[key].last_notified_event_time = lastEvent;
+            saveState(state);
+          }
+          if (isB2Configured()) {
+            await putB2State(state).catch(() => {});
+          }
         }
       } catch (e) {
         console.warn('Initial tracking/notification error:', e);
@@ -195,28 +198,35 @@ async function startServer() {
 
     try {
       const result = await trackParcel(courier as CourierName, trackingNumber);
+      const normStatus = (result.status || '').trim().toLowerCase();
       const state = getState();
       const key = `${courier.toLowerCase()}:${trackingNumber}`;
       const lastEvent = result.history?.[0]?.timestamp || '';
-      state[key] = {
-        ...state[key],
-        status: result.status,
-        last_checked: new Date().toISOString(),
-        location: result.location,
-        last_event_time: lastEvent,
-        history: result.history,
-        customer: result.customer,
-        delivered_at: result.delivered ? (state[key]?.delivered_at || new Date().toISOString()) : state[key]?.delivered_at
-      };
-      saveState(state);
+      if (!result.error && normStatus !== 'unknown' && normStatus !== 'unknown status' && normStatus !== 'unknown error') {
+        state[key] = {
+          ...state[key],
+          status: result.status,
+          last_checked: new Date().toISOString(),
+          location: result.location,
+          last_event_time: lastEvent,
+          history: result.history,
+          customer: result.customer,
+          delivered_at: result.delivered ? (state[key]?.delivered_at || new Date().toISOString()) : state[key]?.delivered_at
+        };
+        saveState(state);
+      }
+
+      const effectiveStatus = state[key]?.status || result.status;
+      const effectiveLocation = state[key]?.location || result.location;
+      const effectiveHistory = state[key]?.history || result.history;
 
       const notifyRes = await notifyParcel(
         parcel.name,
         parcel.courier,
         parcel.tracking_number,
-        result.status,
-        result.location,
-        result.history
+        effectiveStatus,
+        effectiveLocation,
+        effectiveHistory
       );
       if (isB2Configured()) {
         await putB2State(getState()).catch(() => {});
@@ -351,11 +361,15 @@ async function startServer() {
           p.tracking_number.trim().toLowerCase() === String(tracking_number).trim().toLowerCase()
       );
 
-      if (trackedParcel && !result.error) {
+      const normStatus = (result.status || '').trim().toLowerCase();
+      const isUnknown = normStatus === 'unknown' || normStatus === 'unknown status' || normStatus === 'unknown error';
+
+      if (trackedParcel && !result.error && !isUnknown) {
         const state = getState();
         const key = `${trackedParcel.courier.toLowerCase()}:${trackedParcel.tracking_number}`;
         const existing = state[key];
-        const baselineStatus = existing?.last_notified_status ?? existing?.status ?? '';
+        const rawBaseline = existing?.last_notified_status ?? existing?.status ?? '';
+        const baselineStatus = rawBaseline.trim().toLowerCase() === 'unknown' ? '' : rawBaseline;
         const lastEvent = result.history?.[0]?.timestamp || '';
         const statusChanged = result.status !== baselineStatus;
         const unnotifiedDelivery = result.delivered && existing?.delivered_notified === false;

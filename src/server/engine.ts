@@ -366,9 +366,19 @@ export async function trackAllParcels(options?: { sendNotifications?: boolean })
 
     try {
       const result = await trackParcel(courier, tracking_number);
+      const normalizedStatus = (result.status || '').trim().toLowerCase();
+      if (!result.error && (normalizedStatus === 'unknown' || normalizedStatus === 'unknown status' || normalizedStatus === 'unknown error')) {
+        if (state[parcelKey] && state[parcelKey].status?.trim().toLowerCase() === 'unknown') {
+          delete state[parcelKey];
+        }
+        console.log('  [IGNORED] Unknown status response; stored parcel state was not updated.');
+        continue;
+      }
+
       const existingEntry = state[parcelKey];
       // Compare against last_notified_status if tracked, so failed ntfy sends or UI-only checks don't swallow notifications
-      const baselineStatus = existingEntry?.last_notified_status ?? existingEntry?.status ?? '';
+      const rawBaselineStatus = existingEntry?.last_notified_status ?? existingEntry?.status ?? '';
+      const baselineStatus = rawBaselineStatus.trim().toLowerCase() === 'unknown' ? '' : rawBaselineStatus;
       const baselineEvent = existingEntry?.last_notified_event_time ?? existingEntry?.last_event_time ?? '';
       const previousLocation = existingEntry?.location || '';
       

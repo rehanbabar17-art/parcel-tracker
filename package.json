@@ -10,8 +10,6 @@
     "b2:upload": "tsx src/server/b2-sync.ts upload",
     "b2:verify": "tsx src/server/b2-sync.ts verify",
     "b2:clear-history": "tsx src/server/b2-sync.ts clear-history",
-    "mega:download": "tsx src/server/mega-sync.ts download",
-    "mega:upload": "tsx src/server/mega-sync.ts upload",
     "track": "tsx -e \"import { trackAllParcels } from './src/server/engine.ts'; trackAllParcels().then(() => process.exit(0));\"",
     "manage": "tsx src/server/manage.ts",
     "start": "node server.ts"

@@ -935,46 +935,80 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Expandable History Timeline */}
-                    {isExpanded && (
-                      <div className="mt-3 pt-3 border-t border-slate-800 text-xs space-y-2">
+                    {/* Shipment Information & History Timeline (Visible by Default) */}
+                    {parcel.state?.history && parcel.state.history.length > 0 ? (
+                      <div className="mt-3 pt-3 border-t border-slate-800/80 text-xs space-y-2">
                         <div className="flex items-center justify-between text-slate-400 text-[11px] font-medium">
-                          <span>Tracking History</span>
-                          {parcel.state?.last_checked && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              Checked {new Date(parcel.state.last_checked).toLocaleTimeString()}
-                            </span>
-                          )}
+                          <span className="uppercase tracking-wider text-[10px] text-slate-400 font-semibold">
+                            Shipment Information
+                          </span>
+                          <div className="flex items-center gap-3">
+                            {parcel.state?.last_checked && (
+                              <span className="flex items-center gap-1 text-slate-500">
+                                <Clock className="w-3 h-3" />
+                                Checked {new Date(parcel.state.last_checked).toLocaleTimeString()}
+                              </span>
+                            )}
+                            {parcel.state.history.length > 3 && (
+                              <button
+                                onClick={() => setExpandedParcel(isExpanded ? null : key)}
+                                className="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-0.5"
+                              >
+                                <span>
+                                  {isExpanded
+                                    ? 'Show less'
+                                    : `Show all (${parcel.state.history.length})`}
+                                </span>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        {parcel.state?.history && parcel.state.history.length > 0 ? (
-                          <div className="relative pl-4 space-y-2.5 border-l border-slate-800 ml-1 mt-2">
-                            {parcel.state.history.map((h, idx) => (
-                              <div key={idx} className="relative group">
-                                <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-700 group-hover:bg-indigo-400 transition"></div>
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                  <span className="font-medium text-slate-200">{h.status}</span>
-                                  {h.timestamp && (
-                                    <span className="text-[11px] text-slate-500 font-mono">
-                                      {h.timestamp}
-                                    </span>
-                                  )}
+                        <div className="relative pl-4 space-y-2.5 border-l border-slate-800 ml-1 mt-1.5">
+                          {(isExpanded
+                            ? parcel.state.history
+                            : parcel.state.history.slice(0, 3)
+                          ).map((h, idx) => (
+                            <div key={idx} className="relative group">
+                              <div
+                                className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full transition ${
+                                  idx === 0
+                                    ? 'bg-cyan-400 ring-4 ring-cyan-500/15'
+                                    : 'bg-slate-700 group-hover:bg-indigo-400'
+                                }`}
+                              ></div>
+                              {h.timestamp && (
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {h.timestamp}
                                 </div>
-                                {h.location && (
+                              )}
+                              <div className="font-medium text-slate-100 leading-snug">
+                                {h.status}
+                              </div>
+                              {h.location &&
+                                h.location !== 'N/A' &&
+                                !h.status.toLowerCase().includes(h.location.toLowerCase()) && (
                                   <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                                     <MapPin className="w-2.5 h-2.5" /> {h.location}
                                   </div>
                                 )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-slate-800 text-xs">
                           <p className="text-slate-500 text-xs italic">
                             No checkpoint history available from courier API yet.
                           </p>
-                        )}
-                      </div>
+                        </div>
+                      )
                     )}
                   </div>
                 );
