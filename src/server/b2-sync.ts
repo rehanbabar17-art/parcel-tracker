@@ -117,11 +117,44 @@ export async function putB2State(state: TrackingState): Promise<void> {
   }));
 }
 
+export function pruneStateForConfig(config: AppConfig, state: TrackingState): number {
+  if (!config || !Array.isArray(config.trackers) || !state || typeof state !== 'object') {
+    return 0;
+  }
+
+  const activeKeys = new Set(
+    config.trackers
+      .filter((t) => t && t.courier && t.tracking_number && !String(t.tracking_number).startsWith('YOUR_'))
+      .map((t) => `${String(t.courier).trim().toLowerCase()}:${String(t.tracking_number).trim().toLowerCase()}`)
+  );
+
+  let prunedCount = 0;
+  for (const key of Object.keys(state)) {
+    const [rawCourier, ...rest] = key.split(':');
+    const rawTracking = rest.join(':');
+    const normalizedKey = `${(rawCourier || '').trim().toLowerCase()}:${(rawTracking || '').trim().toLowerCase()}`;
+    if (!activeKeys.has(normalizedKey) || state[key]?.removed) {
+      delete state[key];
+      prunedCount++;
+    }
+  }
+
+  return prunedCount;
+}
+
 export async function downloadB2(): Promise<boolean> {
   try {
     console.log('[B2] Downloading parcel-tracker config and state from B2...');
     const config = await fetchB2Config();
     const state = await fetchB2State();
+
+    const pruned = pruneStateForConfig(config, state);
+    if (pruned > 0) {
+      console.log(`[B2] Pruned ${pruned} deleted/old tracking record(s) from state.`);
+      await putB2State(state).catch((err) => {
+        console.warn(`[B2] Warning: could not push pruned state during download: ${err?.message || err}`);
+      });
+    }
 
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n', { mode: 0o600 });
@@ -140,6 +173,11 @@ export async function uploadB2(): Promise<boolean> {
     }
     const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
     const state = fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) : {};
+    const pruned = pruneStateForConfig(config, state);
+    if (pruned > 0) {
+      console.log(`[B2] Pruned ${pruned} deleted/old tracking record(s) before B2 upload.`);
+      fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n', { mode: 0o600 });
+    }
     await putB2Config(config);
     await putB2State(state);
     console.log(`[B2] Uploaded ${config.trackers.length} trackers and ${Object.keys(state).length} state items.`);

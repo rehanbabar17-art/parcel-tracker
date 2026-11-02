@@ -13,6 +13,7 @@ import {
   buildSummary,
   notifyParcel,
   removeDeliveredParcels,
+  pruneOrphanedState,
   syncFromB2,
   syncToB2
 } from './src/server/engine.ts';
@@ -75,8 +76,14 @@ async function startServer() {
       return res.status(400).json({ error: 'Invalid config payload' });
     }
     const saved = saveConfig(updated);
+    const state = getState();
+    pruneOrphanedState(saved, state);
+    saveState(state);
     if (isB2Configured()) {
-      await putB2Config(saved).catch((err) => console.error('[B2] putB2Config failed:', err));
+      await Promise.all([
+        putB2Config(saved).catch((err) => console.error('[B2] putB2Config failed:', err)),
+        putB2State(state).catch((err) => console.error('[B2] putB2State failed:', err))
+      ]);
     }
     res.json(saved);
   });
@@ -237,50 +244,75 @@ async function startServer() {
     }
   });
 
+  async function deleteParcelAndSyncB2(courierRaw: string, trackingNumberRaw: string) {
+    const courier = courierRaw.trim().toLowerCase();
+    const trackingNumber = trackingNumberRaw.trim().toLowerCase();
+
+    if (isB2Configured()) {
+      await syncFromB2().catch((err) => {
+        console.warn('[Server] Pre-delete B2 sync warning:', err?.message || err);
+      });
+    }
+
+    const config = getConfig();
+    const initialLen = config.trackers.length;
+
+    config.trackers = config.trackers.filter(
+      (p) => !(p.courier.toLowerCase() === courier && p.tracking_number.trim().toLowerCase() === trackingNumber)
+    );
+
+    const removedFromConfig = config.trackers.length < initialLen;
+
+    const state = getState();
+    let removedFromState = false;
+    Object.keys(state).forEach((k) => {
+      const [c, ...rest] = k.split(':');
+      const num = rest.join(':').trim().toLowerCase();
+      if ((c || '').trim().toLowerCase() === courier && num === trackingNumber) {
+        delete state[k];
+        removedFromState = true;
+      }
+    });
+    if (state[`${courier}:${trackingNumber}`]) {
+      delete state[`${courier}:${trackingNumber}`];
+      removedFromState = true;
+    }
+
+    const prunedCount = pruneOrphanedState(config, state);
+
+    saveConfig(config);
+    saveState(state);
+
+    if (isB2Configured()) {
+      try {
+        await Promise.all([
+          putB2Config(config),
+          putB2State(state)
+        ]);
+        console.log(`[B2] Deleted parcel ${courier}:${trackingNumber} from B2 config and state (pruned ${prunedCount} orphaned records).`);
+      } catch (b2Err) {
+        console.error('[B2] Failed to upload deletion to B2:', b2Err);
+      }
+    }
+
+    return {
+      found: removedFromConfig || removedFromState,
+      remainingCount: config.trackers.length,
+      b2Synced: isB2Configured()
+    };
+  }
+
   app.delete('/api/parcels/:courier/:trackingNumber', async (req, res) => {
     try {
-      const courier = decodeURIComponent(req.params.courier || '').trim().toLowerCase();
-      const trackingNumber = decodeURIComponent(req.params.trackingNumber || '').trim().toLowerCase();
-      
-      const config = getConfig();
-      const initialLen = config.trackers.length;
+      const courier = decodeURIComponent(req.params.courier || '');
+      const trackingNumber = decodeURIComponent(req.params.trackingNumber || '');
+      const result = await deleteParcelAndSyncB2(courier, trackingNumber);
 
-      config.trackers = config.trackers.filter(
-        (p) => !(p.courier.toLowerCase() === courier && p.tracking_number.trim().toLowerCase() === trackingNumber)
-      );
-
-      if (config.trackers.length === initialLen) {
+      if (!result.found) {
         return res.status(404).json({ error: 'Parcel not found in tracked list' });
       }
 
-      saveConfig(config);
-
-      // Also clean up from state (match all variations of keys)
-      const state = getState();
-      Object.keys(state).forEach((k) => {
-        const [c, ...rest] = k.split(':');
-        const num = rest.join(':').trim().toLowerCase();
-        if (c.toLowerCase() === courier && num === trackingNumber) {
-          delete state[k];
-        }
-      });
-      delete state[`${courier}:${trackingNumber}`];
-      saveState(state);
-
-      // Explicitly sync to B2
-      if (isB2Configured()) {
-        try {
-          await Promise.all([
-            putB2Config(config),
-            putB2State(state)
-          ]);
-          console.log(`[B2] Deleted parcel ${courier}:${trackingNumber} from B2 config and state.`);
-        } catch (b2Err) {
-          console.error('[B2] Failed to upload deletion to B2:', b2Err);
-        }
-      }
-
-      res.json({ success: true, remainingCount: config.trackers.length, b2Synced: isB2Configured() });
+      res.json({ success: true, remainingCount: result.remainingCount, b2Synced: result.b2Synced });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to delete parcel' });
     }
@@ -289,49 +321,20 @@ async function startServer() {
   // Body-based delete endpoint for clients that prefer POST/DELETE with JSON payload
   app.post('/api/parcels/delete', async (req, res) => {
     try {
-      const courier = String(req.body?.courier || '').trim().toLowerCase();
-      const trackingNumber = String(req.body?.tracking_number || req.body?.trackingNumber || '').trim().toLowerCase();
+      const courier = String(req.body?.courier || '');
+      const trackingNumber = String(req.body?.tracking_number || req.body?.trackingNumber || '');
 
-      if (!courier || !trackingNumber) {
+      if (!courier.trim() || !trackingNumber.trim()) {
         return res.status(400).json({ error: 'courier and tracking_number are required' });
       }
 
-      const config = getConfig();
-      const initialLen = config.trackers.length;
+      const result = await deleteParcelAndSyncB2(courier, trackingNumber);
 
-      config.trackers = config.trackers.filter(
-        (p) => !(p.courier.toLowerCase() === courier && p.tracking_number.trim().toLowerCase() === trackingNumber)
-      );
-
-      if (config.trackers.length === initialLen) {
+      if (!result.found) {
         return res.status(404).json({ error: 'Parcel not found in tracked list' });
       }
 
-      saveConfig(config);
-
-      const state = getState();
-      Object.keys(state).forEach((k) => {
-        const [c, ...rest] = k.split(':');
-        const num = rest.join(':').trim().toLowerCase();
-        if (c.toLowerCase() === courier && num === trackingNumber) {
-          delete state[k];
-        }
-      });
-      delete state[`${courier}:${trackingNumber}`];
-      saveState(state);
-
-      if (isB2Configured()) {
-        try {
-          await Promise.all([
-            putB2Config(config),
-            putB2State(state)
-          ]);
-        } catch (b2Err) {
-          console.error('[B2] Failed to sync deletion:', b2Err);
-        }
-      }
-
-      res.json({ success: true, remainingCount: config.trackers.length, b2Synced: isB2Configured() });
+      res.json({ success: true, remainingCount: result.remainingCount, b2Synced: result.b2Synced });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to delete parcel' });
     }

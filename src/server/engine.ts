@@ -17,8 +17,11 @@ import {
   fetchB2Config,
   fetchB2State,
   putB2Config,
-  putB2State
+  putB2State,
+  pruneStateForConfig
 } from './b2-sync.ts';
+
+export { pruneStateForConfig as pruneOrphanedState };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,16 +48,24 @@ function maskNumber(num: string): string {
 
 let inMemoryConfig: AppConfig = loadConfig();
 let inMemoryState: TrackingState = loadState();
+pruneStateForConfig(inMemoryConfig, inMemoryState);
 
 export async function syncFromB2(): Promise<boolean> {
   if (!isB2Configured()) return false;
   try {
     const remoteConfig = await fetchB2Config();
     const remoteState = await fetchB2State();
+    const pruned = pruneStateForConfig(remoteConfig, remoteState);
     inMemoryConfig = remoteConfig;
     inMemoryState = remoteState;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(remoteConfig, null, 2) + '\n', 'utf-8');
     fs.writeFileSync(STATE_FILE, JSON.stringify(remoteState, null, 2) + '\n', 'utf-8');
+    if (pruned > 0) {
+      console.log(`[Engine] Pruned ${pruned} old/deleted tracking record(s) from B2 state.`);
+      await putB2State(remoteState).catch((err) => {
+        console.warn('[Engine] Failed to push pruned state back to B2:', err?.message || err);
+      });
+    }
     console.log(`[Engine] Synced from B2: ${remoteConfig.trackers.length} trackers, ${Object.keys(remoteState).length} state items`);
     return true;
   } catch (err: any) {
@@ -66,6 +77,12 @@ export async function syncFromB2(): Promise<boolean> {
 export async function syncToB2(): Promise<boolean> {
   if (!isB2Configured()) return false;
   try {
+    const pruned = pruneStateForConfig(inMemoryConfig, inMemoryState);
+    if (pruned > 0) {
+      try {
+        fs.writeFileSync(STATE_FILE, JSON.stringify(inMemoryState, null, 2) + '\n', 'utf-8');
+      } catch {}
+    }
     await putB2Config(inMemoryConfig);
     await putB2State(inMemoryState);
     console.log('[Engine] Synced local state and config to B2 successfully');
@@ -82,8 +99,12 @@ export function getConfig(): AppConfig {
 
 export function saveConfig(newConfig: AppConfig): AppConfig {
   inMemoryConfig = newConfig;
+  const pruned = pruneStateForConfig(inMemoryConfig, inMemoryState);
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(newConfig, null, 2) + '\n', 'utf-8');
+    if (pruned > 0) {
+      fs.writeFileSync(STATE_FILE, JSON.stringify(inMemoryState, null, 2) + '\n', 'utf-8');
+    }
   } catch (err) {
     console.warn('[Engine] Failed to write config.json:', err);
   }
@@ -91,6 +112,11 @@ export function saveConfig(newConfig: AppConfig): AppConfig {
     putB2Config(newConfig).catch((err) => {
       console.error('[Engine] Background B2 config upload failed:', err);
     });
+    if (pruned > 0) {
+      putB2State(inMemoryState).catch((err) => {
+        console.error('[Engine] Background B2 pruned state upload failed:', err);
+      });
+    }
   }
   return inMemoryConfig;
 }
@@ -174,6 +200,7 @@ export function loadState(): TrackingState {
 }
 
 export function saveState(state: TrackingState) {
+  pruneStateForConfig(inMemoryConfig, state);
   inMemoryState = state;
   try {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n', 'utf-8');
@@ -232,22 +259,23 @@ export function removeDeliveredParcels(config: AppConfig, state: TrackingState):
       const hoursSinceDelivery = (now.getTime() - deliveredTime.getTime()) / (1000 * 3600);
 
       if (hoursSinceDelivery >= 48) {
-        state[parcelKey] = {
-          ...entry,
-          status: entry.status || 'Delivered',
-          last_checked: new Date().toISOString(),
-          removed: true
-        };
+        delete state[parcelKey];
         toRemoveIndices.push(i);
         count++;
-        console.log(`[Engine] Parcel delivered over 48h ago, auto-removed from active tracking: ${parcel.name} (${parcel.courier.toUpperCase()} #${parcel.tracking_number})`);
+        console.log(`[Engine] Parcel delivered over 48h ago, auto-removed from active tracking and state: ${parcel.name} (${parcel.courier.toUpperCase()} #${parcel.tracking_number})`);
       }
     }
   }
 
   if (toRemoveIndices.length > 0) {
     config.trackers = config.trackers.filter((_, idx) => !toRemoveIndices.includes(idx));
-    saveConfig(config);
+  }
+
+  const pruned = pruneStateForConfig(config, state);
+  if (toRemoveIndices.length > 0 || pruned > 0) {
+    if (toRemoveIndices.length > 0) {
+      saveConfig(config);
+    }
     saveState(state);
   }
 

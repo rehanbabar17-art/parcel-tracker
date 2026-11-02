@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AppConfig, CourierName, ParcelConfig } from './trackers/types.ts';
+import type { AppConfig, CourierName, ParcelConfig, TrackingState } from './trackers/types.ts';
+import { pruneStateForConfig } from './b2-sync.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
+const STATE_FILE = path.join(ROOT_DIR, 'state.json');
 
 function maskNumber(num: string): string {
   if (!num || num.length <= 6) return '****';
@@ -87,7 +89,7 @@ export function runManage(): void {
     } else {
       const beforeCount = currentConfig.trackers.length;
       currentConfig.trackers = currentConfig.trackers.filter(
-        t => t.name.toLowerCase() !== target && t.tracking_number !== target
+        t => t.name.toLowerCase() !== target && t.tracking_number.trim().toLowerCase() !== target
       );
       if (currentConfig.trackers.length < beforeCount) {
         console.log(`[Manage] Removed parcel matching: "${target}"`);
@@ -102,11 +104,25 @@ export function runManage(): void {
     }
   }
 
-  // Save the updated configuration to config.json (ready to be cached)
+  // Save the updated configuration to config.json (ready to be cached/uploaded)
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(currentConfig, null, 2), 'utf-8');
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(currentConfig, null, 2) + '\n', 'utf-8');
   } catch (err) {
     console.error('[Manage] Failed to write config.json:', err);
+  }
+
+  // Also prune any deleted/orphaned tracking IDs from state.json so B2 stays clean
+  if (fs.existsSync(STATE_FILE)) {
+    try {
+      const state: TrackingState = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+      const pruned = pruneStateForConfig(currentConfig, state);
+      if (pruned > 0) {
+        fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+        console.log(`[Manage] Pruned ${pruned} deleted/old tracking record(s) from state.json.`);
+      }
+    } catch (err) {
+      console.warn('[Manage] Could not prune state.json:', err);
+    }
   }
 }
 
