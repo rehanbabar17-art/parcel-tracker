@@ -127,13 +127,7 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
     let status = "Unknown";
     let location = "N/A";
 
-    // Parse active step in progress bar if present
-    const activeStepMatch = viewHtml.match(/<div\s+class=["'][^"']*step-active[^"']*["'][^>]*>[\s\S]*?<\/span>\s*<\/span>\s*([^<]+?)\s*<\/div>/i);
-    if (activeStepMatch && activeStepMatch[1]) {
-      status = activeStepMatch[1].replace(/\s+/g, " ").trim();
-    }
-
-    // Parse checkpoint tracking items
+    // Parse checkpoint tracking items first (these contain the exact Shipment Information history)
     const history: HistoryItem[] = [];
     const itemRegex = /<div\s+class=["']tracking-item["'][^>]*>[\s\S]*?<div\s+class=["']tracking-date["'][^>]*>([\s\S]*?)<\/div>[\s\S]*?<div\s+class=["']tracking-content["'][^>]*>([\s\S]*?)<\/div>/gi;
     let itemMatch: RegExpExecArray | null;
@@ -150,8 +144,14 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
       }
     }
 
-    if ((status === "Unknown" || !status) && history.length > 0) {
-      status = history[0].status.toLowerCase().includes("delivered") ? "Delivered" : history[0].status;
+    // Set status to the latest Shipment Information item if available
+    if (history.length > 0 && history[0].status) {
+      status = history[0].status;
+    } else {
+      const activeStepMatch = viewHtml.match(/<div\s+class=["'][^"']*step-active[^"']*["'][^>]*>[\s\S]*?<\/span>\s*<\/span>\s*([^<]+?)\s*<\/div>/i);
+      if (activeStepMatch && activeStepMatch[1]) {
+        status = activeStepMatch[1].replace(/\s+/g, " ").trim();
+      }
     }
 
     const cleanText = viewHtml
@@ -160,7 +160,7 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ");
 
-    if (status === "Unknown") {
+    if (status === "Unknown" || status === "") {
       const statusMatch = cleanText.match(/Current Status(?:\/Reason)?\s*:\s*([^:]+?)(?:Origin|Destination|Consignee|$)/i);
       if (statusMatch && statusMatch[1]) {
         status = statusMatch[1].trim();
@@ -176,7 +176,7 @@ async function trackWithUrl(baseUrl: string, trackingNumber: string): Promise<Tr
       status.toLowerCase().includes("delivered") ||
       (history.length > 0 && history[0].status.toLowerCase().includes("delivered"));
 
-    if (delivered && status === "Unknown") {
+    if (delivered && (status === "Unknown" || status === "")) {
       status = "Delivered";
     }
 
