@@ -1,0 +1,6 @@
+{
+  "name": "Parcel Tracker",
+  "description": "Automated parcel tracking for TCS, Leopards, PostEx, Daraz, DEX, and Trax with real-time status updates and ntfy notifications.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

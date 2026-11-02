@@ -1,0 +1,10 @@
+# Sensitive local config with tracking numbers & private ntfy topic - never commit to public repo
+config.json
+
+# Tracking state (statuses/locations) - persisted via GitHub Actions cache
+state.json
+
+# Node & Build artifacts
+node_modules/
+dist/
+.env
