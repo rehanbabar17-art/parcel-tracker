@@ -66,6 +66,7 @@ const COURIER_META: Record<string, { label: string; color: string; bg: string; b
   daraz: { label: 'Daraz', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
   dex: { label: 'DEX Express', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
   trax: { label: 'Trax Logistics', color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
+  speedaf: { label: 'Speedaf', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
 };
 
 export default function App() {
@@ -614,6 +615,7 @@ export default function App() {
               <option value="daraz">Daraz</option>
               <option value="dex">DEX Express</option>
               <option value="trax">Trax Logistics</option>
+              <option value="speedaf">Speedaf Express</option>
             </select>
             <input
               type="text"
@@ -720,6 +722,7 @@ export default function App() {
                 <option value="daraz">Daraz</option>
                 <option value="dex">DEX</option>
                 <option value="trax">Trax</option>
+                <option value="speedaf">Speedaf</option>
               </select>
 
               {(filterCourier !== 'all' || filterStatus !== 'all' || searchQuery) && (
@@ -1170,6 +1173,7 @@ export default function App() {
                   <option value="daraz">Daraz</option>
                   <option value="dex">DEX (Daraz Express)</option>
                   <option value="trax">Trax Logistics</option>
+                  <option value="speedaf">Speedaf Express</option>
                 </select>
               </div>
 

@@ -1,4 +1,4 @@
-export type CourierName = 'tcs' | 'leopards' | 'postex' | 'daraz' | 'dex' | 'trax';
+export type CourierName = 'tcs' | 'leopards' | 'postex' | 'daraz' | 'dex' | 'trax' | 'speedaf';
 
 export interface HistoryItem {
   timestamp: string;

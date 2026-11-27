@@ -61,7 +61,7 @@ export function runManage(): void {
     if (!name || !trackingNumber) {
       console.error('[Manage] Error: Parcel Name and Tracking Number are required to add a parcel.');
     } else {
-      const validCouriers: CourierName[] = ['tcs', 'leopards', 'postex', 'daraz', 'dex', 'trax'];
+      const validCouriers: CourierName[] = ['tcs', 'leopards', 'postex', 'daraz', 'dex', 'trax', 'speedaf'];
       const chosenCourier = validCouriers.includes(courier) ? courier : 'tcs';
       
       const existingIdx = currentConfig.trackers.findIndex(

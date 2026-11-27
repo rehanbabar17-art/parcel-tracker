@@ -4,6 +4,7 @@ import { trackTCS } from './tcs.ts';
 import { trackPostEx } from './postex.ts';
 import { trackTrax } from './trax.ts';
 import { trackLeopards } from './leopards.ts';
+import { trackSpeedaf } from './speedaf.ts';
 
 export type * from './types.ts';
 
@@ -21,7 +22,9 @@ export async function trackParcel(courier: CourierName, trackingNumber: string):
       return trackTrax(trackingNumber);
     case 'leopards':
       return trackLeopards(trackingNumber);
+    case 'speedaf':
+      return trackSpeedaf(trackingNumber);
     default:
-      throw new Error(`Unknown courier: ${courier}. Supported: tcs, leopards, postex, daraz, dex, trax`);
+      throw new Error(`Unknown courier: ${courier}. Supported: tcs, leopards, postex, daraz, dex, trax, speedaf`);
   }
 }
